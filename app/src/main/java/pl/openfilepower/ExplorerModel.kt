@@ -29,6 +29,7 @@ class ExplorerModel(app: Application) : AndroidViewModel(app) {
     var details by mutableStateOf<Details?>(null); private set
     var loading by mutableStateOf(false); private set
     var busy by mutableStateOf(false); private set
+    var cancellable by mutableStateOf(false); private set
     var progress by mutableStateOf(""); private set
     var error by mutableStateOf<String?>(null)
     var notice by mutableStateOf<String?>(null)
@@ -124,9 +125,15 @@ class ExplorerModel(app: Application) : AndroidViewModel(app) {
         val target = destination ?: return
         val clip = dropped?.let { Clip(listOf(it), false) } ?: clipboard ?: return
         operation {
+            cancellable = true
             cancelTransfer = false
+            var lastProgress = 0L
             withContext(Dispatchers.IO) { files.transfer(clip, target, { cancelTransfer }) { name, bytes ->
-                viewModelScope.launch { progress = "$name · ${formatSize(bytes)}" }
+                val now = android.os.SystemClock.elapsedRealtime()
+                if (now - lastProgress >= 100) {
+                    lastProgress = now
+                    viewModelScope.launch { progress = "$name · ${formatSize(bytes)}" }
+                }
             } }
             if (clip.move) clipboard = null
             tree.clear(); refresh(); notice = if (clip.move) "Przeniesiono pliki" else "Skopiowano pliki"
@@ -144,7 +151,7 @@ class ExplorerModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             busy = true; progress = "Pracuję…"
             try { block() } catch (e: Exception) { error = e.message ?: "Operacja nie powiodła się"; refresh() }
-            finally { busy = false; progress = "" }
+            finally { busy = false; cancellable = false; progress = "" }
         }
     }
     fun inspect(item: Item) {

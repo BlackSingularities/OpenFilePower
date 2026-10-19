@@ -20,7 +20,7 @@ data class Place(val root: String, val parts: List<String> = emptyList()) {
 data class Root(val id: String, val name: String, val address: String, val user: String = "", val domain: String = "", val password: String = "") {
     val network get() = address.startsWith("smb://")
 }
-data class Item(val place: Place, val name: String, val directory: Boolean, val size: Long, val modified: Long, val mime: String)
+data class Item(val place: Place, val name: String, val directory: Boolean, val size: Long, val modified: Long, val mime: String, val localUri: Uri? = null)
 data class Clip(val items: List<Item>, val move: Boolean)
 
 object FileRules {
@@ -54,13 +54,13 @@ class Files(private val context: Context, private val roots: () -> List<Root>) {
         place.parts.forEach { doc = doc.findFile(it) ?: error("Nie znaleziono: $it") }
         return doc
     }
-    fun uri(item: Item): Uri? = if (root(item.place).network) null else document(item.place).uri
+    fun uri(item: Item): Uri? = if (root(item.place).network) null else item.localUri ?: document(item.place).uri
     fun list(place: Place): List<Item> = if (root(place).network) {
         smb(place, true).use { folder -> folder.listFiles().map { f -> f.use {
             val name = it.name.trimEnd('/')
             Item(place.child(name), name, it.isDirectory, if (it.isDirectory) 0 else it.length(), it.lastModified(), FileRules.mime(name))
         } } }
-    } else document(place).listFiles().map { Item(place.child(it.name ?: "?"), it.name ?: "?", it.isDirectory, it.length(), it.lastModified(), it.type ?: FileRules.mime(it.name ?: "")) }
+    } else document(place).listFiles().map { Item(place.child(it.name ?: "?"), it.name ?: "?", it.isDirectory, it.length(), it.lastModified(), it.type ?: FileRules.mime(it.name ?: ""), it.uri) }
     fun input(item: Item): InputStream = if (root(item.place).network) smb(item.place).inputStream else context.contentResolver.openInputStream(document(item.place).uri) ?: error("Nie można odczytać pliku")
     private fun exists(place: Place): Boolean = if (root(place).network) smb(place).use { it.exists() } else document(place.parent() ?: place).findFile(place.parts.last()) != null
     fun mkdir(parent: Place, name: String): Place {

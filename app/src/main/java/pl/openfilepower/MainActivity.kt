@@ -146,7 +146,7 @@ class MainActivity : ComponentActivity() {
                     if (vm.busy) Surface(shape = RoundedCornerShape(12.dp), color = Panel) {
                         Column(Modifier.padding(12.dp)) {
                             LinearProgressIndicator(Modifier.fillMaxWidth())
-                            Row(verticalAlignment = Alignment.CenterVertically) { Text(vm.progress, Modifier.weight(1f), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis); TextButton(onClick = vm::cancel) { Text("Anuluj transfer") } }
+                            Row(verticalAlignment = Alignment.CenterVertically) { Text(vm.progress, Modifier.weight(1f), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis); if (vm.cancellable) TextButton(onClick = vm::cancel) { Text("Anuluj transfer") } }
                         }
                     }
                     Box(Modifier.weight(1f).fillMaxWidth()) {
@@ -154,8 +154,8 @@ class MainActivity : ComponentActivity() {
                             vm.loading -> CircularProgressIndicator(Modifier.align(Alignment.Center))
                             vm.place == null -> Welcome({ picker.launch(null) }, { network = true })
                             vm.visible.isEmpty() -> Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) { Icon(Icons.Outlined.FolderOpen, null, Modifier.size(64.dp), tint = Muted); Spacer(Modifier.height(16.dp)); Text(if (vm.query.isEmpty()) "Tutaj zaczyna się porządek" else "Brak pasujących plików", fontWeight = FontWeight.Medium); Text(if (vm.query.isEmpty()) "Utwórz folder lub wklej pliki ze schowka." else "Spróbuj innej nazwy.", color = Muted, fontSize = 12.sp) }
-                            vm.grid -> LazyVerticalGrid(columns = GridCells.Adaptive(148.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(bottom = 16.dp)) { items(vm.visible, key = { it.place.toString() }) { FileTile(it, vm) } }
-                            else -> LazyColumn(contentPadding = PaddingValues(bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) { items(vm.visible, key = { it.place.toString() }) { FileRow(it, vm, medium) } }
+                            vm.grid -> LazyVerticalGrid(columns = GridCells.Adaptive(148.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(bottom = 16.dp)) { items(vm.visible, key = { it.place.toString() }) { FileTile(it, vm) { item -> vm.inspect(item); if (!wide) phoneDetails = true } } }
+                            else -> LazyColumn(contentPadding = PaddingValues(bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) { items(vm.visible, key = { it.place.toString() }) { FileRow(it, vm, medium) { item -> vm.inspect(item); if (!wide) phoneDetails = true } } }
                         }
                     }
                     Row(Modifier.fillMaxWidth().padding(vertical = 10.dp), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -224,24 +224,27 @@ class MainActivity : ComponentActivity() {
 private fun iconFor(item: Item): ImageVector = when { item.directory -> Icons.Outlined.Folder; item.mime.startsWith("image/") -> Icons.Outlined.Image; item.mime.startsWith("video/") -> Icons.Outlined.Movie; item.mime.startsWith("audio/") -> Icons.Outlined.MusicNote; item.name.endsWith("zip", true) -> Icons.Outlined.FolderZip; else -> Icons.Outlined.Description }
 private fun tintFor(item: Item) = when { item.directory -> Mint; item.mime.startsWith("image/") -> Lavender; item.mime.startsWith("video/") -> Color(0xFFF2B49B); else -> Color(0xFF9ABFEF) }
 @Composable private fun FileGlyph(item: Item, vm: ExplorerModel, large: Boolean = false) {
-    Box(Modifier.size(if (large) 66.dp else 44.dp).clip(RoundedCornerShape(12.dp)).background(tintFor(item).copy(alpha = .1f)).dragAndDropSource { detectTapGestures(onLongPress = { vm.drag = item; startTransfer(DragAndDropTransferData(ClipData.newPlainText("OpenFilePower", item.name))) }) }, contentAlignment = Alignment.Center) { Icon(iconFor(item), "Przytrzymaj, aby przeciągnąć ${item.name}", Modifier.size(if (large) 36.dp else 25.dp), tint = tintFor(item)) }
+    Box(Modifier.size(if (large) 66.dp else 44.dp).clip(RoundedCornerShape(12.dp)).background(tintFor(item).copy(alpha = .1f)).dragAndDropSource(transferData = { vm.drag = item; DragAndDropTransferData(ClipData.newPlainText("OpenFilePower", item.name)) }), contentAlignment = Alignment.Center) {
+        Icon(iconFor(item), "Przytrzymaj, aby przeciągnąć ${item.name}", Modifier.size(if (large) 36.dp else 25.dp), tint = tintFor(item))
+        if (item.localUri != null && item.mime.startsWith("image/")) AsyncImage(item.localUri, null, Modifier.fillMaxSize(), contentScale = androidx.compose.ui.layout.ContentScale.Crop)
+    }
 }
-@Composable private fun FileRow(item: Item, vm: ExplorerModel, medium: Boolean) {
+@Composable private fun FileRow(item: Item, vm: ExplorerModel, medium: Boolean, inspect: (Item) -> Unit) {
     val selected = item.place in vm.selected
     Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(if (selected) Mint.copy(alpha = .1f) else Panel.copy(alpha = .55f)).then(if (item.directory) Modifier.dropFolder(vm, item.place) else Modifier).combinedClickable(onClick = { vm.open(item) }, onLongClick = { vm.select(item) }).padding(horizontal = 10.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
         FileGlyph(item, vm); Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) { Text(item.name, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Medium); Text(if (item.directory) "Folder" else "${item.name.substringAfterLast('.', "plik").uppercase()} · ${formatSize(item.size)}", color = Muted, fontSize = 10.sp) }
         if (medium) Text(formatDate(item.modified), color = Muted, fontSize = 11.sp, modifier = Modifier.padding(horizontal = 12.dp))
-        Action(Icons.Outlined.Info, "Właściwości ${item.name}") { vm.inspect(item) }
+        Action(Icons.Outlined.Info, "Właściwości ${item.name}") { inspect(item) }
         Checkbox(selected, { vm.select(item) }, modifier = Modifier.size(40.dp))
     }
 }
-@Composable private fun FileTile(item: Item, vm: ExplorerModel) {
+@Composable private fun FileTile(item: Item, vm: ExplorerModel, inspect: (Item) -> Unit) {
     val selected = item.place in vm.selected
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(if (selected) Color(0xFF263E3B) else Panel).then(if (item.directory) Modifier.dropFolder(vm, item.place) else Modifier).combinedClickable(onClick = { vm.open(item) }, onLongClick = { vm.select(item) }).padding(12.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { FileGlyph(item, vm, true); Checkbox(selected, { vm.select(item) }, Modifier.size(30.dp)) }
         Spacer(Modifier.height(14.dp)); Text(item.name, maxLines = 2, overflow = TextOverflow.Ellipsis, fontSize = 13.sp, modifier = Modifier.heightIn(min = 36.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) { Text(if (item.directory) "Folder" else formatSize(item.size), color = Muted, fontSize = 11.sp, modifier = Modifier.weight(1f)); Action(Icons.Outlined.Info, "Właściwości") { vm.inspect(item) } }
+        Row(verticalAlignment = Alignment.CenterVertically) { Text(if (item.directory) "Folder" else formatSize(item.size), color = Muted, fontSize = 11.sp, modifier = Modifier.weight(1f)); Action(Icons.Outlined.Info, "Właściwości") { inspect(item) } }
     }
 }
 @Composable private fun Inspector(vm: ExplorerModel, modifier: Modifier) {

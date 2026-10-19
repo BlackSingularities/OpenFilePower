@@ -78,7 +78,8 @@ class ExplorerDeviceTest {
     }
     @Test fun tabletAndPhoneScreenshots() {
         val device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
-        val (files, base) = workspace()
+        val files = Files(context) { listOf(local) }
+        val base = files.mkdir(Place(local.id), "Przestrzeń osobista")
         listOf("Dokumenty", "Fotografia", "Projekty", "Muzyka").forEach { files.mkdir(base, it) }
         write(files, base, "Plan podróży.txt", "Bieszczady 2026".toByteArray())
         val prefs = Preferences(context)
@@ -90,6 +91,8 @@ class ExplorerDeviceTest {
         device.executeShellCommand("wm density 160")
         context.startActivity(Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
         assertTrue(device.wait(Until.hasObject(By.text("Plan podróży.txt")), 15000))
+        device.waitForIdle()
+        device.findObject(By.desc("Właściwości Plan podróży.txt"))?.click()
         device.waitForIdle()
         val out = File(context.getExternalFilesDir(null), "screenshots").apply { mkdirs() }
         device.takeScreenshot(File(out, "tablet.png"))
