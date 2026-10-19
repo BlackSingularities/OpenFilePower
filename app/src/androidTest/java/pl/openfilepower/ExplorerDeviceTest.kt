@@ -78,9 +78,10 @@ class ExplorerDeviceTest {
         val source = files.mkdir(Place(local.id), "network-${UUID.randomUUID()}")
         val target = files.mkdir(Place(nas.id), "test-${UUID.randomUUID()}")
         val bytes = ByteArray(300_001) { (it % 127).toByte() }
-        val item = write(files, source, "żółć.bin", bytes)
+        val item = write(files, source, "żółć 100% #1.bin", bytes)
         files.transfer(Clip(listOf(item), false), target, { false }) { _, _ -> }
         val remote = files.list(target).single()
+        assertEquals(item.name, remote.name)
         assertArrayEquals(bytes, files.input(remote).use { it.readBytes() })
         val back = files.mkdir(source, "back")
         files.transfer(Clip(listOf(remote), true), back, { false }) { _, _ -> }

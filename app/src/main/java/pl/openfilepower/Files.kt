@@ -48,7 +48,9 @@ class Files(private val context: Context, private val roots: () -> List<Root>) {
     }
     private fun smb(place: Place, directory: Boolean = false): SmbFile {
         val root = root(place)
-        val path = root.address.trimEnd('/') + "/" + place.parts.joinToString("/") { Uri.encode(it) }
+        place.parts.forEach(FileRules::validateName)
+        // jCIFS consumes raw SMB path characters, not percent-encoded HTTP paths.
+        val path = root.address.trimEnd('/') + "/" + place.parts.joinToString("/")
         return SmbFile(if (directory) path.trimEnd('/') + "/" else path, smbContext(root))
     }
     fun document(place: Place): DocumentFile {
@@ -121,8 +123,8 @@ class Files(private val context: Context, private val roots: () -> List<Root>) {
             if (from.authority == "com.android.externalstorage.documents" && toId.startsWith(fromId.trimEnd('/') + "/")) return true
             return runCatching { DocumentsContract.isChildDocument(context.contentResolver, from, to) }.getOrDefault(false)
         }
-        val a = java.net.URI(fromRoot.address)
-        val b = java.net.URI(toRoot.address)
+        val a = java.net.URL(null, fromRoot.address, jcifs.smb.Handler())
+        val b = java.net.URL(null, toRoot.address, jcifs.smb.Handler())
         if (a.port != b.port) return false
         val sameHost = a.host.equals(b.host, true) || runCatching {
             java.net.InetAddress.getAllByName(a.host).toSet().intersect(java.net.InetAddress.getAllByName(b.host).toSet()).isNotEmpty()

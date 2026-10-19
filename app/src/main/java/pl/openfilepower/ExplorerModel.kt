@@ -96,7 +96,8 @@ class ExplorerModel(app: Application) : AndroidViewModel(app) {
         operation {
             require(name.isNotBlank() && host.matches(Regex("[a-zA-Z0-9.:-]+")) && share.isNotBlank()) { "Podaj nazwę, adres serwera i udział" }
             require(!share.contains('/') && !share.contains('\\')) { "Podaj nazwę pojedynczego udziału" }
-            val address = "smb://${host.trim()}/${Uri.encode(share.trim())}/"
+            FileRules.validateName(share.trim())
+            val address = "smb://${host.trim()}/${share.trim()}/"
             require(roots.none { it.address == address }) { "Ten udział jest już dodany" }
             val root = Root(UUID.randomUUID().toString(), name.trim(), address, user, domain, password)
             withContext(Dispatchers.IO) { Files(getApplication()) { listOf(root) }.list(Place(root.id)) }
