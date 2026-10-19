@@ -55,7 +55,7 @@ class Files(private val context: Context, private val roots: () -> List<Root>) {
     }
     fun document(place: Place): DocumentFile {
         var doc = DocumentFile.fromTreeUri(context, Uri.parse(root(place).address)) ?: error("Nieprawidłowy dostęp do folderu")
-        check(doc.exists() && doc.canRead()) { "Brak dostępu do źródła. Podłącz urządzenie lub wybierz folder ponownie." }
+        check(doc.exists()) { "Brak dostępu do źródła. Podłącz urządzenie lub wybierz folder ponownie." }
         place.parts.forEach { doc = doc.findFile(it) ?: error("Nie znaleziono: $it") }
         return doc
     }
@@ -121,7 +121,7 @@ class Files(private val context: Context, private val roots: () -> List<Root>) {
             val toId = DocumentsContract.getDocumentId(to)
             if (fromId == toId) return true
             if (from.authority == "com.android.externalstorage.documents" && toId.startsWith(fromId.trimEnd('/') + "/")) return true
-            return runCatching { DocumentsContract.isChildDocument(context.contentResolver, from, to) }.getOrDefault(false)
+            return if (android.os.Build.VERSION.SDK_INT >= 29) runCatching { DocumentsContract.isChildDocument(context.contentResolver, from, to) }.getOrDefault(false) else false
         }
         val a = java.net.URL(null, fromRoot.address, jcifs.smb.Handler())
         val b = java.net.URL(null, toRoot.address, jcifs.smb.Handler())
