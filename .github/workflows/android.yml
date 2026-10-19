@@ -86,7 +86,7 @@ jobs:
           EXPECTED=$(grep -oP 'releaseCertSha256 = "\K[0-9a-f]{64}' app/build.gradle.kts)
           APKSIGNER=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)apksigner
           "$APKSIGNER" verify --verbose --print-certs OpenFilePower.apk | tee signature.txt
-          ACTUAL=$(grep -m1 'Signer #1 certificate SHA-256 digest' signature.txt | awk '{print $NF}')
+          ACTUAL=$(grep -m1 -E 'Signer.*certificate SHA-256 digest' signature.txt | awk '{print $NF}')
           if [ "$ACTUAL" != "$EXPECTED" ]; then echo "::error::Certyfikat APK ($ACTUAL) różni się od oczekiwanego ($EXPECTED)"; exit 1; fi
           grep -q 'Verified using v2 scheme (APK Signature Scheme v2): true' signature.txt
       - name: Publikacja wydania
