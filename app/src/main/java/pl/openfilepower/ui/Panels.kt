@@ -108,10 +108,11 @@ import pl.openfilepower.*
             SwitchRow(Icons.Rounded.Folder, "Foldery na początku", null, vm.foldersFirst) { vm.updateFoldersFirst(it) }
             SwitchRow(Icons.Rounded.Image, "Miniatury", "Podgląd zdjęć, RAW-ów i filmów na liście", vm.thumbnails) { vm.updateThumbnails(it) }
             SwitchRow(Icons.Rounded.Compress, "Widok kompaktowy", "Niższe wiersze – więcej plików na ekranie", vm.compact) { vm.updateCompact(it) }
+            SwitchRow(Icons.Rounded.FilterList, "Filtry typów", "Pasek Wszystko · Foldery · Zdjęcia · Wideo… nad listą plików i w galerii", vm.showFilters) { vm.updateShowFilters(it) }
             CompactChoice(Icons.Rounded.PhotoSizeSelectLarge, "Rozmiar siatki i galerii", GridSize.entries, vm.gridSize, { it.label }) { vm.updateGridSize(it) }
         }
         Group("Zdjęcia i sesja") {
-            SwitchRow(Icons.Rounded.Sensors, "Auto-podgląd w trybie sesji", "Nowe zdjęcie z aparatu lub karty Wi-Fi otwiera się od razu", vm.liveAutoShow) { vm.updateLiveAutoShow(it) }
+            SwitchRow(Icons.Rounded.CalendarMonth, "Galeria według miesięcy", "Grupuj oś czasu po miesiącach zamiast po dniach", vm.galleryByMonth) { vm.updateGalleryByMonth(it) }
             ActionRow(Icons.Rounded.PhotoLibrary, "Otwórz galerię", "Oś czasu, albumy, filtry Zdjęcia/RAW/Wideo") { close(); vm.openGallery() }
             InfoRow(Icons.Rounded.Camera, "Obsługiwane RAW", RawFormats.extensions.sorted().joinToString(", ") { it.uppercase() })
         }

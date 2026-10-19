@@ -84,7 +84,7 @@ import pl.openfilepower.*
             if (medium) Sidebar(vm, Modifier.width(if (wide) 268.dp else 232.dp), { picker.launch(null) }, { network = true }, { settings = true })
             Box(Modifier.weight(1f).fillMaxHeight()) {
                 when (vm.view) {
-                    View.Home -> HomeScreen(vm, medium, HomeActions(grantAccess, { picker.launch(null) }, { network = true }, { settings = true }, inspect))
+                    View.Home -> HomeScreen(vm, medium, HomeActions(grantAccess, { picker.launch(null) }, { network = true }, { settings = true }, inspect) { drawer = true })
                     View.Trash -> TrashScreen(vm, medium) { drawer = true }
                     View.Gallery -> GalleryScreen(vm, medium, actions)
                     else -> BrowserScreen(vm, medium, wide, actions)
@@ -103,14 +103,18 @@ import pl.openfilepower.*
                 Sidebar(vm, Modifier.width(300.dp).windowInsetsPadding(WindowInsets.safeDrawing), { picker.launch(null) }, { network = true }, { settings = true }) { drawer = false }
             }
         }
-        if (phoneDetails && !wide) Panel("Właściwości", { phoneDetails = false }) { InspectorContent(vm) { phoneDetails = false } }
         if (settings) SettingsPanel(vm, { settings = false }, grantAccess, { picker.launch(null) }, { network = true }) {
             picker.launch(Uri.parse("content://com.android.externalstorage.documents/document/primary%3AAndroid%2Fdata"))
         }
         vm.analysis?.let { AnalysisPanel(vm, it) }
         if (network) NetworkPanel(vm, { network = false }) { name, host, share, user, pass, domain -> vm.addNetwork(name, host, share, user, pass, domain); network = false }
-        vm.viewer?.let { (images, index) -> ImageViewer(vm, images, index, { vm.viewer = null }, inspect) }
+        // Właściwości z przeglądarki zdjęć zawsze jako panel nad nią – inaczej trzeba by ją zamknąć, by je zobaczyć.
+        vm.viewer?.let { (images, index) -> ImageViewer(vm, images, index, { vm.viewer = null }) { item -> vm.inspect(item); phoneDetails = true } }
         vm.editor?.let { TextEditor(vm, it) { vm.editor = null } }
+        if (phoneDetails && (!wide || vm.viewer != null)) {
+            BackHandler { phoneDetails = false }
+            Panel("Właściwości", { phoneDetails = false }) { InspectorContent(vm) { phoneDetails = false } }
+        }
     }
 
     renaming?.let { items -> BatchRenameDialog(vm, items) { renaming = null } }
