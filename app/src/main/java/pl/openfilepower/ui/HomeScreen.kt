@@ -55,7 +55,7 @@ class HomeActions(val grantAccess: () -> Unit, val addFolder: () -> Unit, val ad
 
         if (vm.spaces.isNotEmpty()) item {
             LazyRow(contentPadding = PaddingValues(horizontal = side), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                items(vm.spaces, key = { it.first.id }) { (volume, space) ->
+                items(vm.spaces.distinctBy { it.first.id }, key = { it.first.id }) { (volume, space) ->
                     val fg = if (vm.access) Palette.Ink else Color.White
                     Column(Modifier.then(if (vm.spaces.size == 1) Modifier.fillParentMaxWidth() else Modifier.width(260.dp)).clip(RoundedCornerShape(20.dp)).background(if (vm.access) Palette.White else Palette.PanelHigh)
                         .clickable(enabled = vm.access) { vm.navigate(Place(volume.id), vm.tabs.isNotEmpty()) }.padding(horizontal = 16.dp, vertical = 12.dp)) {
@@ -164,7 +164,7 @@ class HomeActions(val grantAccess: () -> Unit, val addFolder: () -> Unit, val ad
                 }
             }
         }
-        val others = vm.roots.filterNot { it.direct }
+        val others = vm.roots.filterNot { it.direct }.distinctBy { it.id }
         if (others.isNotEmpty()) {
             item { Header("Foldery i serwery", side) }
             item {

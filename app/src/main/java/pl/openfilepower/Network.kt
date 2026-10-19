@@ -52,9 +52,12 @@ class NasDiscovery(private val context: Context) {
             override fun onServiceLost(info: NsdServiceInfo) {}
         }
         val mdns = runCatching { nsd?.discoverServices("_smb._tcp.", NsdManager.PROTOCOL_DNS_SD, listener); nsd != null }.getOrDefault(false)
+        // Wątek pomocniczy kończymy flagą, nie przerwaniem: nieobsłużony InterruptedException w zwykłym
+        // wątku zamyka całą aplikację.
+        val finished = java.util.concurrent.atomic.AtomicBoolean(false)
         // Rozwiązywanie usług mDNS po kolei (starsze Androidy nie pozwalają na kilka naraz).
         val resolver = Thread {
-            while (!cancelled()) {
+            try { while (!finished.get() && !cancelled()) {
                 val info = resolveQueue.poll(300, TimeUnit.MILLISECONDS) ?: continue
                 val done = java.util.concurrent.CountDownLatch(1)
                 @Suppress("DEPRECATION")
@@ -69,11 +72,11 @@ class NasDiscovery(private val context: Context) {
                     })
                 }.onFailure { done.countDown() }
                 done.await(3, TimeUnit.SECONDS)
-            }
+            } } catch (_: InterruptedException) { } catch (_: Exception) { }
         }.apply { isDaemon = true; start() }
 
         try {
-            val (ip, prefix) = localNetwork() ?: run { progress(1f); Thread.sleep(3000); return }
+            val (ip, prefix) = localNetwork() ?: run { progress(1f); runCatching { Thread.sleep(3000) }; return }
             val bytes = ip.address
             // Skanujemy najwyżej /24, nawet w większych sieciach – szybko i bez zalewania sieci.
             val base = if (prefix >= 24) bytes.copyOf() else bytes.copyOf().also { it[3] = 0 }
@@ -85,22 +88,26 @@ class NasDiscovery(private val context: Context) {
             val done = AtomicInteger()
             val pool = Executors.newFixedThreadPool(48)
             for (i in 1..count) pool.execute {
-                if (cancelled()) return@execute
+                if (cancelled() || finished.get()) return@execute
                 val n = start + i
                 val address = "${(n ushr 24) and 0xff}.${(n ushr 16) and 0xff}.${(n ushr 8) and 0xff}.${n and 0xff}"
-                if (address != ip.hostAddress && open(address, 445, 350)) {
-                    val name = runCatching { java.net.InetAddress.getByName(address).canonicalHostName }.getOrNull()?.takeIf { it != address } ?: address
-                    report(NasHost(address, name.substringBefore('.'), "Skan"))
+                runCatching {
+                    if (address != ip.hostAddress && open(address, 445, 350)) {
+                        val name = runCatching { java.net.InetAddress.getByName(address).canonicalHostName }.getOrNull()?.takeIf { it != address } ?: address
+                        report(NasHost(address, name.substringBefore('.').ifBlank { address }, "Skan"))
+                    }
                 }
-                progress(done.incrementAndGet().toFloat() / count)
+                runCatching { progress(done.incrementAndGet().toFloat() / count) }
             }
             pool.shutdown()
-            while (!pool.awaitTermination(200, TimeUnit.MILLISECONDS)) if (cancelled()) { pool.shutdownNow(); break }
-            // Chwila na spóźnione odpowiedzi mDNS.
-            if (mdns && !cancelled()) Thread.sleep(1500)
+            try {
+                while (!pool.awaitTermination(200, TimeUnit.MILLISECONDS)) if (cancelled()) { pool.shutdownNow(); break }
+                // Chwila na spóźnione odpowiedzi mDNS.
+                if (mdns && !cancelled()) Thread.sleep(1500)
+            } catch (_: InterruptedException) { pool.shutdownNow() }
         } finally {
+            finished.set(true)
             runCatching { nsd?.stopServiceDiscovery(listener) }
-            resolver.interrupt()
         }
     }
     private fun open(host: String, port: Int, timeout: Int) = runCatching { Socket().use { it.connect(InetSocketAddress(host, port), timeout); true } }.getOrDefault(false)

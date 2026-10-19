@@ -1,5 +1,11 @@
 # Zmiany
 
+## 0.3.1
+
+- Naprawiono zamykanie się aplikacji po zakończeniu wykrywania serwerów NAS (wątek rozpoznawania nazw mDNS był przerywany w sposób, który zabijał proces).
+- Błąd wykrywania NAS pokazuje komunikat zamiast zamykać aplikację; pojedyncze nieudane adresy nie przerywają skanu.
+- Pulpit nie wywraca się, gdy indeks multimediów Androida zawiera ten sam plik kilka razy.
+
 ## 0.3.0
 
 Menedżer plików połączony z przeglądarką zdjęć i wideo w duchu Fotopodglądu i PhotoManagera.

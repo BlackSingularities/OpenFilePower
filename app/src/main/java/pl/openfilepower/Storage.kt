@@ -90,9 +90,11 @@ class MediaIndex(private val context: Context) {
     fun recent(roots: List<Root>, limit: Int = 40): List<Item> = collect("${MediaStore.Files.FileColumns.DATE_MODIFIED} > ?", arrayOf((System.currentTimeMillis() / 1000 - 60L * 86400).toString()), "${MediaStore.Files.FileColumns.DATE_MODIFIED} DESC", limit, roots)
     private fun collect(selection: String, args: Array<String>, order: String, limit: Int, roots: List<Root>): List<Item> {
         val result = mutableListOf<Item>()
+        val seen = HashSet<String>()
         runCatching {
             query(selection, args, order, limit * 2) { path, _, _ ->
-                if (result.size >= limit) return@query
+                // MediaStore potrafi zwrócić ten sam plik kilka razy – zduplikowany klucz wywraca listy Compose.
+                if (result.size >= limit || !seen.add(path)) return@query
                 val f = File(path)
                 if (!f.isFile || path.contains("/${Trash.FOLDER}/")) return@query
                 val place = placeFor(f, roots) ?: return@query

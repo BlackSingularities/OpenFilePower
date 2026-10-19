@@ -50,7 +50,7 @@ class ExplorerModel(app: Application) : AndroidViewModel(app) {
     var active by mutableStateOf(0); private set
     val place get() = if (view == View.Browse) tabs.getOrNull(active)?.place else null
     var entries by mutableStateOf<List<Item>>(emptyList()); private set
-    var favorites by mutableStateOf(prefs.places("favorites")); private set
+    var favorites by mutableStateOf(prefs.places("favorites").distinct()); private set
     var selected by mutableStateOf<Set<Place>>(emptySet()); private set
     val selecting get() = selected.isNotEmpty()
     var clipboard by mutableStateOf<Clip?>(null); private set
@@ -81,7 +81,7 @@ class ExplorerModel(app: Application) : AndroidViewModel(app) {
     var compact by mutableStateOf(prefs.flag("compact", false)); private set
     var gridSize by mutableStateOf(runCatching { GridSize.valueOf(prefs.text("gridSize", GridSize.MEDIUM.name)) }.getOrDefault(GridSize.MEDIUM)); private set
     var typeFilter by mutableStateOf(TypeFilter.ALL)
-    var recentPlaces by mutableStateOf(prefs.places("recentPlaces")); private set
+    var recentPlaces by mutableStateOf(prefs.places("recentPlaces").distinct()); private set
 
     // Wykrywanie NAS.
     var nasHosts by mutableStateOf<List<NasHost>>(emptyList()); private set
@@ -672,7 +672,9 @@ class ExplorerModel(app: Application) : AndroidViewModel(app) {
                         }
                     }
                 }
-            } finally { nasScanning = false; nasProgress = 1f }
+            } catch (e: CancellationException) { throw e }
+            catch (e: Exception) { error = "Wykrywanie NAS nie powiodło się: ${e.message ?: e.javaClass.simpleName}. Wpisz adres serwera ręcznie." }
+            finally { nasScanning = false; nasProgress = 1f }
         }
     }
     fun stopNasScan() { nasJob?.cancel(); nasScanning = false }
