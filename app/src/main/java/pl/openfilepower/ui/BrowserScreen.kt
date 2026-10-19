@@ -54,6 +54,8 @@ class BrowserActions(
     val delete: () -> Unit,
     val compress: () -> Unit,
     val settings: () -> Unit,
+    val batchRename: () -> Unit = {},
+    val analyze: () -> Unit = {},
 )
 
 @Composable fun BrowserScreen(vm: ExplorerModel, medium: Boolean, wide: Boolean, actions: BrowserActions) {
@@ -68,7 +70,9 @@ class BrowserActions(
             if (category == null) {
                 Tabs(vm)
                 vm.place?.let { Breadcrumbs(vm, it) }
+                if (vm.live) LiveBanner(vm)
             }
+            TypeFilters(vm)
             InfoLine(vm, category)
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 val items = vm.visible
@@ -82,7 +86,7 @@ class BrowserActions(
                         when { vm.searchResults != null || vm.query.isNotEmpty() -> "Spróbuj innej nazwy lub użyj * jako dowolnego ciągu."; category != null -> "Pliki pojawią się, gdy system je zindeksuje."; else -> "Utwórz folder przyciskiem + lub wklej pliki ze schowka." },
                         Modifier.align(Alignment.Center),
                     )
-                    vm.grid -> LazyVerticalGrid(columns = GridCells.Adaptive(if (medium) 150.dp else 112.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(bottom = 160.dp)) {
+                    vm.grid -> LazyVerticalGrid(columns = GridCells.Adaptive((if (medium) vm.gridSize.tablet else vm.gridSize.phone).dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(bottom = 160.dp)) {
                         items(items, key = { it.place.toString() }) { FileTile(it, vm, actions.inspect) }
                     }
                     else -> LazyColumn(contentPadding = PaddingValues(bottom = 160.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -108,6 +112,7 @@ class BrowserActions(
             Text(category?.label ?: vm.place?.let(vm::title) ?: "Pliki", fontSize = 20.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(if (category != null) "Cała pamięć" else vm.place?.let { p -> vm.rootOf(p)?.let { r -> if (r.network) "NAS · ${r.name}" else r.name } } ?: "", fontSize = 11.sp, color = Palette.TextDim, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
+        if (category == null && vm.place != null && medium) RoundIcon(Icons.Rounded.Sensors, if (vm.live) "Zatrzymaj tryb sesji" else "Tryb sesji na żywo", active = vm.live) { vm.toggleLive() }
         RoundIcon(Icons.Rounded.Search, "Szukaj", active = searchOpen) {
             if (searchOpen) { vm.query = ""; if (vm.searchResults != null || vm.searching) vm.back() }
             setSearch(!searchOpen)
@@ -124,6 +129,10 @@ class BrowserActions(
                 MenuRow(if (vm.showHidden) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility, if (vm.showHidden) "Ukryj ukryte pliki" else "Pokaż ukryte pliki") { menu = false; vm.updateHidden(!vm.showHidden) }
                 vm.place?.let { p -> MenuRow(if (p in vm.favorites) Icons.Rounded.Star else Icons.Rounded.StarBorder, if (p in vm.favorites) "Usuń z ulubionych" else "Dodaj do ulubionych") { menu = false; vm.toggleFavorite(p) } }
                 vm.place?.let { p -> MenuRow(Icons.Rounded.Tab, "Otwórz w nowej karcie") { menu = false; vm.navigate(p, true) } }
+                vm.place?.let { MenuRow(Icons.Rounded.Sensors, if (vm.live) "Zatrzymaj tryb sesji" else "Tryb sesji (nowe zdjęcia na żywo)") { menu = false; vm.toggleLive() } }
+                vm.place?.let { MenuRow(Icons.Rounded.DonutLarge, "Analizuj zajęte miejsce") { menu = false; actions.analyze() } }
+                vm.place?.let { p -> MenuRow(Icons.Rounded.AddToHomeScreen, "Skrót na ekranie głównym") { menu = false; vm.pinShortcut(p) } }
+                MenuRow(Icons.Rounded.PhotoLibrary, "Galeria") { menu = false; vm.openGallery() }
                 MenuRow(Icons.Rounded.Refresh, "Odśwież") { menu = false; vm.refresh() }
                 MenuRow(Icons.Rounded.Settings, "Ustawienia") { menu = false; actions.settings() }
             }
@@ -217,6 +226,22 @@ class BrowserActions(
     }
 }
 
+@Composable private fun TypeFilters(vm: ExplorerModel) {
+    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(vertical = 2.dp), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+        TypeFilter.entries.forEach { f -> Chip(f.label, vm.typeFilter == f) { vm.typeFilter = f } }
+    }
+}
+
+@Composable private fun LiveBanner(vm: ExplorerModel) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp).clip(Pill).background(Palette.White).padding(start = 14.dp, end = 4.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(8.dp).clip(CircleShape).background(Palette.Record))
+        Spacer(Modifier.width(8.dp))
+        Text("Sesja na żywo · nowych: ${vm.liveNew}" + if (vm.liveAutoShow) " · auto-podgląd" else "", color = Palette.Ink, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+        Text(if (vm.liveAutoShow) "Auto: wł." else "Auto: wył.", color = Palette.Ink, fontSize = 11.sp, modifier = Modifier.clip(Pill).clickable { vm.updateLiveAutoShow(!vm.liveAutoShow) }.padding(horizontal = 10.dp, vertical = 6.dp))
+        Text("Stop", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.clip(Pill).background(Palette.Ink).clickable { vm.toggleLive() }.padding(horizontal = 12.dp, vertical = 6.dp))
+    }
+}
+
 @Composable fun Empty(icon: ImageVector, title: String, subtitle: String, modifier: Modifier = Modifier) {
     Column(modifier.padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Box(Modifier.size(88.dp).clip(CircleShape).background(Palette.PanelHigh), contentAlignment = Alignment.Center) { Icon(icon, null, Modifier.size(40.dp), tint = Palette.TextDim) }
@@ -236,7 +261,7 @@ class BrowserActions(
     }
 }
 
-@Composable private fun ProgressCard(vm: ExplorerModel, p: Progress) {
+@Composable fun ProgressCard(vm: ExplorerModel, p: Progress) {
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Palette.PanelHigh).padding(14.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
@@ -266,7 +291,7 @@ class BrowserActions(
     }
 }
 
-@Composable private fun SelectionDock(vm: ExplorerModel, actions: BrowserActions, inFolder: Boolean) {
+@Composable fun SelectionDock(vm: ExplorerModel, actions: BrowserActions, inFolder: Boolean) {
     val items = vm.selectedItems
     val single = items.singleOrNull()
     Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(Palette.PanelHigh).padding(horizontal = 4.dp, vertical = 6.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
@@ -279,6 +304,8 @@ class BrowserActions(
             DockAction(Icons.Rounded.MoreHoriz, "Więcej") { menu = true }
             DarkMenu(menu, { menu = false }) {
                 if (single != null) MenuRow(Icons.Rounded.Edit, "Zmień nazwę") { menu = false; actions.rename(single) }
+                if (items.size > 1) MenuRow(Icons.Rounded.DriveFileRenameOutline, "Zmień nazwy (${items.size})") { menu = false; actions.batchRename() }
+                if (single != null && single.directory) MenuRow(Icons.Rounded.AddToHomeScreen, "Skrót na ekranie głównym") { menu = false; vm.pinShortcut(single.place) }
                 MenuRow(Icons.Rounded.Archive, "Spakuj do ZIP") { menu = false; actions.compress() }
                 if (single != null && FileRules.isZip(single)) MenuRow(Icons.Rounded.Unarchive, "Rozpakuj") { menu = false; vm.clearSelection(); vm.extract(single) }
                 if (single != null) MenuRow(Icons.Rounded.Info, "Właściwości") { menu = false; actions.inspect(single) }

@@ -22,5 +22,23 @@ class MainActivity : ComponentActivity() {
             requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
         }
         setContent { AppTheme { AppRoot() } }
+        handle(intent)
+    }
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        handle(intent)
+    }
+    /** Skrót folderu z ekranu głównego: model odbiera go przez [ShortcutBus]. */
+    private fun handle(intent: android.content.Intent?) {
+        if (intent?.action != ACTION_OPEN_FOLDER) return
+        val root = intent.getStringExtra(EXTRA_ROOT) ?: return
+        ShortcutBus.place.value = Place(root, intent.getStringArrayExtra(EXTRA_PARTS)?.toList() ?: emptyList())
+    }
+    companion object {
+        const val ACTION_OPEN_FOLDER = "pl.openfilepower.OPEN_FOLDER"
+        const val EXTRA_ROOT = "root"
+        const val EXTRA_PARTS = "parts"
     }
 }
+
+object ShortcutBus { val place = kotlinx.coroutines.flow.MutableStateFlow<Place?>(null) }

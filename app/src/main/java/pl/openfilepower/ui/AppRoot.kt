@@ -44,6 +44,7 @@ import pl.openfilepower.*
     var rename by remember { mutableStateOf<Item?>(null) }
     var deleting by remember { mutableStateOf<List<Item>?>(null) }
     var compressing by remember { mutableStateOf<List<Item>?>(null) }
+    var renaming by remember { mutableStateOf<List<Item>?>(null) }
     val snacks = remember { SnackbarHostState() }
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { it?.let(vm::addLocal) }
@@ -55,6 +56,8 @@ import pl.openfilepower.*
         } else legacyPermission.launch(arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.WRITE_EXTERNAL_STORAGE))
     }
     LifecycleResumeEffect(Unit) { vm.onResume(); onPauseOrDispose { } }
+    val shortcut by ShortcutBus.place.collectAsState()
+    LaunchedEffect(shortcut) { shortcut?.let { vm.openShortcut(it); ShortcutBus.place.value = null } }
     LaunchedEffect(vm.notice) { vm.notice?.let { snacks.showSnackbar(it); vm.notice = null } }
 
     val overlay = vm.viewer != null || vm.editor != null
@@ -75,6 +78,7 @@ import pl.openfilepower.*
             menu = { drawer = true }, inspect = inspect,
             newFolder = { newFolder = true }, newFile = { newFile = true }, rename = { rename = it },
             delete = { deleting = vm.selectedItems }, compress = { compressing = vm.selectedItems }, settings = { settings = true },
+            batchRename = { renaming = vm.selectedItems }, analyze = { vm.analyze() },
         )
         Row(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
             if (medium) Sidebar(vm, Modifier.width(if (wide) 268.dp else 232.dp), { picker.launch(null) }, { network = true }, { settings = true })
@@ -82,13 +86,14 @@ import pl.openfilepower.*
                 when (vm.view) {
                     View.Home -> HomeScreen(vm, medium, HomeActions(grantAccess, { picker.launch(null) }, { network = true }, { settings = true }, inspect))
                     View.Trash -> TrashScreen(vm, medium) { drawer = true }
+                    View.Gallery -> GalleryScreen(vm, medium, actions)
                     else -> BrowserScreen(vm, medium, wide, actions)
                 }
                 SnackbarHost(snacks, Modifier.align(Alignment.BottomCenter).padding(bottom = 88.dp)) { data ->
                     Snackbar(containerColor = Palette.White, contentColor = Palette.Ink, shape = RoundedCornerShape(16.dp), modifier = Modifier.padding(horizontal = 16.dp)) { Text(data.visuals.message) }
                 }
             }
-            if (wide && inspectorOpen && (vm.view == View.Browse || vm.view is View.Category)) Inspector(vm, Modifier.width(320.dp).fillMaxHeight())
+            if (wide && inspectorOpen && (vm.view == View.Browse || vm.view is View.Category || vm.view == View.Gallery)) Inspector(vm, Modifier.width(320.dp).fillMaxHeight())
         }
 
         // Szuflada z lewej na telefonie.
@@ -102,11 +107,13 @@ import pl.openfilepower.*
         if (settings) SettingsPanel(vm, { settings = false }, grantAccess, { picker.launch(null) }, { network = true }) {
             picker.launch(Uri.parse("content://com.android.externalstorage.documents/document/primary%3AAndroid%2Fdata"))
         }
+        vm.analysis?.let { AnalysisPanel(vm, it) }
+        if (network) NetworkPanel(vm, { network = false }) { name, host, share, user, pass, domain -> vm.addNetwork(name, host, share, user, pass, domain); network = false }
         vm.viewer?.let { (images, index) -> ImageViewer(vm, images, index, { vm.viewer = null }, inspect) }
         vm.editor?.let { TextEditor(vm, it) { vm.editor = null } }
     }
 
-    if (network) NetworkDialog({ network = false }) { name, host, share, user, pass, domain -> vm.addNetwork(name, host, share, user, pass, domain); network = false }
+    renaming?.let { items -> BatchRenameDialog(vm, items) { renaming = null } }
     if (newFolder) NameDialog("Nowy folder", "Nowy folder", "Utwórz", selectStem = false, dismiss = { newFolder = false }) { vm.mkdir(it); newFolder = false }
     if (newFile) NameDialog("Nowy plik", "notatka.txt", "Utwórz", dismiss = { newFile = false }) { vm.createFile(it); newFile = false }
     rename?.let { item -> NameDialog("Zmień nazwę", item.name, dismiss = { rename = null }) { vm.rename(item, it); rename = null; vm.clearSelection() } }

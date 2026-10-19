@@ -35,7 +35,7 @@ object StorageAccess {
     fun space(path: String): Space? = runCatching { StatFs(path).let { Space(it.totalBytes, it.availableBytes) } }.getOrNull()
 }
 
-enum class Category(val label: String) { IMAGES("Obrazy"), VIDEO("Wideo"), AUDIO("Muzyka"), DOCUMENTS("Dokumenty"), ARCHIVES("Archiwa"), APK("Aplikacje"), DOWNLOADS("Pobrane"), LARGE("Duże pliki") }
+enum class Category(val label: String) { IMAGES("Obrazy"), RAW("RAW"), VIDEO("Wideo"), AUDIO("Muzyka"), DOCUMENTS("Dokumenty"), ARCHIVES("Archiwa"), APK("Aplikacje"), DOWNLOADS("Pobrane"), LARGE("Duże pliki") }
 data class CategoryStat(val category: Category, val count: Int, val bytes: Long)
 
 /** Przegląd plików przez MediaStore (wymaga pełnego dostępu, by znać ścieżki). */
@@ -48,6 +48,7 @@ class MediaIndex(private val context: Context) {
         fun ext(list: Collection<String>) = list.joinToString(" OR ") { "$data LIKE ?" } to list.map { "%.$it" }.toTypedArray()
         return when (category) {
             Category.IMAGES -> "$mime LIKE ?" to arrayOf("image/%")
+            Category.RAW -> ext(RawFormats.extensions)
             Category.VIDEO -> "$mime LIKE ?" to arrayOf("video/%")
             Category.AUDIO -> "$mime LIKE ?" to arrayOf("audio/%")
             Category.DOCUMENTS -> ext(FileRules.documentExtensions)
@@ -78,7 +79,15 @@ class MediaIndex(private val context: Context) {
         val order = if (category == Category.LARGE) "${MediaStore.Files.FileColumns.SIZE} DESC" else "${MediaStore.Files.FileColumns.DATE_MODIFIED} DESC"
         return collect(s, a, order, limit, roots)
     }
-    fun recent(roots: List<Root>, limit: Int = 24): List<Item> = collect("${MediaStore.Files.FileColumns.DATE_MODIFIED} > ?", arrayOf((System.currentTimeMillis() / 1000 - 60L * 86400).toString()), "${MediaStore.Files.FileColumns.DATE_MODIFIED} DESC", limit, roots)
+    /** Wszystkie zdjęcia, RAW-y i filmy, od najnowszych – oś czasu galerii. */
+    fun gallery(roots: List<Root>, limit: Int = 20000): List<Item> {
+        val mime = MediaStore.Files.FileColumns.MIME_TYPE
+        val raw = RawFormats.extensions.toList()
+        val selection = "$mime LIKE ? OR $mime LIKE ? OR " + raw.joinToString(" OR ") { "$data LIKE ?" }
+        val args = arrayOf("image/%", "video/%") + raw.map { "%.$it" }
+        return collect(selection, args, "${MediaStore.Files.FileColumns.DATE_MODIFIED} DESC", limit, roots)
+    }
+    fun recent(roots: List<Root>, limit: Int = 40): List<Item> = collect("${MediaStore.Files.FileColumns.DATE_MODIFIED} > ?", arrayOf((System.currentTimeMillis() / 1000 - 60L * 86400).toString()), "${MediaStore.Files.FileColumns.DATE_MODIFIED} DESC", limit, roots)
     private fun collect(selection: String, args: Array<String>, order: String, limit: Int, roots: List<Root>): List<Item> {
         val result = mutableListOf<Item>()
         runCatching {

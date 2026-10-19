@@ -1,6 +1,6 @@
 # OpenFilePower
 
-Pełnoprawny menedżer plików dla Androida – cała pamięć urządzenia, karty SD, foldery systemowe i NAS w jednej przestrzeni z kartami. Kotlin, Jetpack Compose, czarno-biały interfejs wspólny z [OpenPDF](https://github.com/BlackSingularities/OpenPDF). Bez reklam i telemetrii.
+Kombajn do plików, zdjęć i wideo na Androida – cała pamięć urządzenia, karty SD, foldery systemowe i NAS w jednej przestrzeni z kartami, galeria z obsługą RAW, histogramem i trybem sesji na żywo. Kotlin, Jetpack Compose, czarno-biały interfejs wspólny z [OpenPDF](https://github.com/BlackSingularities/OpenPDF). Bez reklam i telemetrii.
 
 [![Android](https://github.com/BlackSingularities/OpenFilePower/actions/workflows/android.yml/badge.svg)](https://github.com/BlackSingularities/OpenFilePower/actions/workflows/android.yml)
 
@@ -20,6 +20,10 @@ Pobierz **[OpenFilePower.apk](https://github.com/BlackSingularities/OpenFilePowe
 | Wyszukiwanie | Filtr bieżącego folderu, wyszukiwanie w podfolderach z `*`, kategorie: obrazy, wideo, muzyka, dokumenty, archiwa, APK, pobrane, duże pliki |
 | Podgląd | Przeglądarka zdjęć z powiększaniem, edytor tekstu, miniatury zdjęć i filmów, właściwości z EXIF, rozmiarem folderu, SHA-256 i MD5 |
 | Transfery | Postęp w procentach i prędkość, anulowanie, praca w tle z powiadomieniem, natychmiastowe przenoszenie na tym samym nośniku |
+| Galeria i foto | Oś czasu i albumy całej pamięci, filtry Zdjęcia/RAW/Wideo, RAW (ARW, NEF, CR2, CR3, RAF, DNG, RW2, ORF, PEF…) z podglądem z osadzonego JPEG, histogram RGB, maska przepaleń, plakietki EXIF, pokaz slajdów, odtwarzanie filmów |
+| Tryb sesji | Folder obserwowany na żywo (także NAS): nowe zdjęcia z aparatu lub karty Wi-Fi pojawiają się od razu i mogą otwierać się automatycznie |
+| Sieć | Automatyczne wykrywanie NAS (mDNS + skan SMB), lista udziałów, logowanie jako gość lub użytkownik |
+| Narzędzia | Masowa zmiana nazw z podglądem, analiza zajętego miejsca, skróty folderów na ekranie głównym, widok kompaktowy, rozmiar siatki S/M/L |
 | Tablet | Stały panel boczny od 720 dp, inspektor właściwości od 1000 dp; na telefonie szuflada i panele |
 | Aktualizacje | Sprawdzanie przy starcie, pobieranie z GitHub Releases, kontrola SHA-256, pakietu, wersji i certyfikatu podpisu |
 

@@ -16,7 +16,7 @@ import coil.ImageLoaderFactory
 import coil.decode.VideoFrameDecoder
 
 class OpenFilePowerApp : Application(), ImageLoaderFactory {
-    override fun newImageLoader() = ImageLoader.Builder(this).components { add(VideoFrameDecoder.Factory()) }.crossfade(true).build()
+    override fun newImageLoader() = ImageLoader.Builder(this).components { add(RawFetcher.Factory()); add(VideoFrameDecoder.Factory()) }.crossfade(true).build()
 }
 
 /**

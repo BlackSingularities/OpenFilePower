@@ -64,7 +64,9 @@ object FileRules {
     val documentExtensions = setOf("pdf", "doc", "docx", "odt", "rtf", "xls", "xlsx", "ods", "ppt", "pptx", "odp", "txt", "md", "csv", "epub")
     fun isText(item: Item) = !item.directory && (item.mime.startsWith("text/") || item.extension in textExtensions)
     fun isZip(item: Item) = !item.directory && item.extension == "zip"
-    fun isImage(item: Item) = !item.directory && item.mime.startsWith("image/")
+    fun isRaw(item: Item) = !item.directory && RawFormats.isRaw(item.name)
+    fun isImage(item: Item) = !item.directory && (item.mime.startsWith("image/") || RawFormats.isRaw(item.name))
+    fun isMedia(item: Item) = isImage(item) || isVideo(item)
     fun isVideo(item: Item) = !item.directory && item.mime.startsWith("video/")
     fun isAudio(item: Item) = !item.directory && item.mime.startsWith("audio/")
     fun isApk(item: Item) = !item.directory && item.extension == "apk"
@@ -144,6 +146,15 @@ class Files(private val context: Context, private val roots: () -> List<Root>) {
             root.network -> smb(item.place).inputStream
             root.direct -> file(item.place).inputStream()
             else -> context.contentResolver.openInputStream(item.localUri ?: document(item.place).uri) ?: error("Nie można odczytać pliku")
+        }
+    }
+    /** EXIF z pliku: ścieżka lub deskryptor pozwalają czytać też formaty RAW wymagające swobodnego dostępu. */
+    fun exif(item: Item): androidx.exifinterface.media.ExifInterface {
+        val root = root(item.place)
+        return when {
+            root.direct -> androidx.exifinterface.media.ExifInterface(file(item.place).path)
+            root.network -> input(item).use { androidx.exifinterface.media.ExifInterface(it) }
+            else -> (context.contentResolver.openFileDescriptor(item.localUri ?: document(item.place).uri, "r") ?: error("Nie można odczytać pliku")).use { androidx.exifinterface.media.ExifInterface(it.fileDescriptor) }
         }
     }
     fun exists(place: Place): Boolean {

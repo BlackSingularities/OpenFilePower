@@ -16,12 +16,16 @@ import java.io.File
 import java.util.UUID
 
 data class FolderTab(val id: String = UUID.randomUUID().toString(), val place: Place, val history: List<Place> = emptyList())
-data class Details(val item: Item, val values: List<Pair<String, String>>, val preview: Uri? = null, val loading: Boolean = false)
+data class Details(val item: Item, val values: List<Pair<String, String>>, val preview: Any? = null, val loading: Boolean = false)
 data class PendingPaste(val clip: Clip, val destination: Place, val conflicts: List<Item>)
 data class EditorState(val item: Item, val original: String, val text: String, val readOnly: Boolean = false) { val modified get() = text != original }
 data class ArchiveState(val item: Item, val entries: List<Pair<String, Long>>)
 data class Progress(val title: String, val text: String = "", val fraction: Float? = null, val cancellable: Boolean = false)
 
+enum class MediaFilter(val label: String) { ALL("Wszystko"), PHOTOS("Zdjęcia"), RAW("RAW"), VIDEOS("Wideo") }
+enum class TypeFilter(val label: String) { ALL("Wszystko"), FOLDERS("Foldery"), IMAGES("Zdjęcia"), VIDEO("Wideo"), AUDIO("Audio"), DOCUMENTS("Dokumenty"), ARCHIVES("Archiwa") }
+enum class GridSize(val label: String, val phone: Int, val tablet: Int) { SMALL("S", 88, 112), MEDIUM("M", 112, 150), LARGE("L", 150, 200) }
+data class Analysis(val place: Place, val entries: List<Pair<Item, Long>>, val done: Boolean) { val total get() = entries.sumOf { it.second } }
 enum class Sort(val label: String) { NAME("Nazwa"), SIZE("Rozmiar"), DATE("Data"), TYPE("Typ") }
 
 sealed interface View {
@@ -29,6 +33,7 @@ sealed interface View {
     data object Browse : View
     data class Category(val category: pl.openfilepower.Category) : View
     data object Trash : View
+    data object Gallery : View
 }
 
 class ExplorerModel(app: Application) : AndroidViewModel(app) {
@@ -73,6 +78,30 @@ class ExplorerModel(app: Application) : AndroidViewModel(app) {
     var thumbnails by mutableStateOf(prefs.flag("thumbnails", true)); private set
     var sort by mutableStateOf(runCatching { Sort.valueOf(prefs.text("sort", Sort.NAME.name)) }.getOrDefault(Sort.NAME)); private set
     var autoUpdate by mutableStateOf(prefs.autoUpdate); private set
+    var compact by mutableStateOf(prefs.flag("compact", false)); private set
+    var gridSize by mutableStateOf(runCatching { GridSize.valueOf(prefs.text("gridSize", GridSize.MEDIUM.name)) }.getOrDefault(GridSize.MEDIUM)); private set
+    var typeFilter by mutableStateOf(TypeFilter.ALL)
+    var recentPlaces by mutableStateOf(prefs.places("recentPlaces")); private set
+
+    // Wykrywanie NAS.
+    var nasHosts by mutableStateOf<List<NasHost>>(emptyList()); private set
+    var nasScanning by mutableStateOf(false); private set
+    var nasProgress by mutableStateOf(0f); private set
+    var nasShares by mutableStateOf<Pair<String, List<String>>?>(null); private set
+    var nasSharesBusy by mutableStateOf(false); private set
+    private var nasJob: Job? = null
+
+    // Galeria i tryb sesji.
+    var galleryFilter by mutableStateOf(MediaFilter.ALL)
+    var galleryAlbums by mutableStateOf(false)
+    var galleryAlbum by mutableStateOf<Place?>(null); private set
+    var live by mutableStateOf(false); private set
+    var liveAutoShow by mutableStateOf(prefs.flag("liveAutoShow", true)); private set
+    var liveNew by mutableStateOf(0); private set
+    private var liveJob: Job? = null
+
+    var analysis by mutableStateOf<Analysis?>(null)
+    private var analysisJob: Job? = null
 
     // Ekran startowy.
     var access by mutableStateOf(StorageAccess.granted(app)); private set
@@ -97,7 +126,7 @@ class ExplorerModel(app: Application) : AndroidViewModel(app) {
 
     val visible: List<Item> get() {
         val source = searchResults ?: entries
-        val filtered = source.filter { (showHidden || !it.hidden) && (searchResults != null || it.name.contains(query, true)) }
+        val filtered = source.filter { (showHidden || !it.hidden) && (searchResults != null || it.name.contains(query, true)) && matches(it, typeFilter) && (view != View.Gallery || galleryMatches(it)) }
         val comparator: Comparator<Item> = when (sort) {
             Sort.SIZE -> compareBy { it.size }
             Sort.DATE -> compareBy { it.modified }
@@ -183,13 +212,37 @@ class ExplorerModel(app: Application) : AndroidViewModel(app) {
     fun title(p: Place) = p.parts.lastOrNull() ?: rootOf(p)?.name ?: "Folder"
     fun pathOf(p: Place) = (listOf(rootOf(p)?.name ?: "?") + p.parts).joinToString(" / ")
     private fun resetListing() { query = ""; searchJob?.cancel(); searchResults = null; searching = false; selected = emptySet() }
+    private fun galleryMatches(item: Item) = (galleryAlbum == null || item.place.parent() == galleryAlbum) && when (galleryFilter) {
+        MediaFilter.ALL -> true
+        MediaFilter.PHOTOS -> FileRules.isImage(item) && !FileRules.isRaw(item)
+        MediaFilter.RAW -> FileRules.isRaw(item)
+        MediaFilter.VIDEOS -> FileRules.isVideo(item)
+    }
+    /** Albumy galerii: foldery z mediami, od najnowszego. */
+    val albums: List<Triple<Place, List<Item>, Long>> get() = entries.filter { !it.hidden }.groupBy { it.place.parent() ?: it.place }.map { (p, items) -> Triple(p, items, items.maxOf { it.modified }) }.sortedByDescending { it.third }
+    private fun matches(item: Item, filter: TypeFilter) = when (filter) {
+        TypeFilter.ALL -> true
+        TypeFilter.FOLDERS -> item.directory
+        TypeFilter.IMAGES -> FileRules.isImage(item)
+        TypeFilter.VIDEO -> FileRules.isVideo(item)
+        TypeFilter.AUDIO -> FileRules.isAudio(item)
+        TypeFilter.DOCUMENTS -> !item.directory && (item.extension in FileRules.documentExtensions || FileRules.isText(item))
+        TypeFilter.ARCHIVES -> !item.directory && item.extension in FileRules.archiveExtensions
+    }
+    private fun rememberPlace(p: Place) {
+        recentPlaces = (listOf(p) + recentPlaces.filterNot { it == p }).filter { r -> roots.any { it.id == r.root } }.take(12)
+        prefs.savePlaces("recentPlaces", recentPlaces)
+    }
     fun navigate(p: Place, newTab: Boolean = false) {
+        if (p.parts.isNotEmpty()) rememberPlace(p)
+        typeFilter = TypeFilter.ALL
         if (newTab || tabs.isEmpty()) { tabs = tabs + FolderTab(place = p); active = tabs.lastIndex }
         else if (view != View.Browse) tabs = tabs.mapIndexed { i, t -> if (i == active) t.copy(place = p, history = t.history + t.place) else t }
         else if (tabs[active].place != p) tabs = tabs.mapIndexed { i, t -> if (i == active) t.copy(place = p, history = (t.history + t.place).takeLast(50)) else t }
         view = View.Browse
         resetListing(); saveTabs(); refresh()
     }
+    private fun stopLive() { live = false; liveJob?.cancel() }
     fun switch(index: Int) { active = index; view = View.Browse; resetListing(); refresh() }
     fun closeTab(index: Int) {
         tabs = tabs.filterIndexed { i, _ -> i != index }
@@ -200,11 +253,14 @@ class ExplorerModel(app: Application) : AndroidViewModel(app) {
     fun goHome() { view = View.Home; resetListing(); refresh() }
     fun openCategory(category: Category) { view = View.Category(category); resetListing(); refresh() }
     fun openTrash() { view = View.Trash; resetListing(); refresh() }
+    fun openGallery(album: Place? = null) { galleryAlbum = album; galleryAlbums = false; view = View.Gallery; resetListing(); refresh() }
+    fun showAlbum(album: Place?) { galleryAlbum = album; galleryAlbums = false; selected = emptySet() }
     fun up() { place?.parent()?.let { navigate(it) } }
     /** Wstecz: zaznaczenie → wyszukiwanie → historia karty → folder nadrzędny → ekran startowy. */
     fun back(): Boolean {
         if (selecting) { selected = emptySet(); return true }
         if (searchResults != null || searching) { resetListing(); return true }
+        if (view == View.Gallery && galleryAlbum != null) { galleryAlbum = null; galleryAlbums = true; return true }
         if (view != View.Browse) { if (view == View.Home) return false; goHome(); return true }
         val tab = tabs.getOrNull(active) ?: return false
         val previous = tab.history.lastOrNull()
@@ -225,6 +281,7 @@ class ExplorerModel(app: Application) : AndroidViewModel(app) {
                     View.Home -> loadHome()
                     View.Browse -> { val current = place ?: return@launch; entries = withContext(Dispatchers.IO) { files.list(current) } }
                     is View.Category -> entries = withContext(Dispatchers.IO) { media.files(v.category, roots) }
+                    View.Gallery -> entries = withContext(Dispatchers.IO) { media.gallery(roots) }
                     View.Trash -> trashEntries = withContext(Dispatchers.IO) { trash.entries().sortedByDescending { it.deleted } }
                 }
             }
@@ -391,14 +448,39 @@ class ExplorerModel(app: Application) : AndroidViewModel(app) {
                     info += "Zawartość" to "${m.files} plików, ${m.folders - 1} folderów"
                 }
                 if (FileRules.isImage(item)) runCatching {
-                    files.input(item).use { stream ->
-                        val exif = ExifInterface(stream)
-                        listOf("Aparat" to ExifInterface.TAG_MODEL, "Producent" to ExifInterface.TAG_MAKE, "Obiektyw" to ExifInterface.TAG_LENS_MODEL, "Wykonano" to ExifInterface.TAG_DATETIME_ORIGINAL, "Szerokość" to ExifInterface.TAG_IMAGE_WIDTH, "Wysokość" to ExifInterface.TAG_IMAGE_LENGTH, "ISO" to ExifInterface.TAG_PHOTOGRAPHIC_SENSITIVITY, "Przysłona" to ExifInterface.TAG_F_NUMBER, "Ekspozycja" to ExifInterface.TAG_EXPOSURE_TIME, "Ogniskowa" to ExifInterface.TAG_FOCAL_LENGTH).forEach { (label, tag) -> exif.getAttribute(tag)?.let { info += label to it } }
-                        exif.latLong?.let { info += "GPS" to "%.6f, %.6f".format(java.util.Locale.ROOT, it[0], it[1]) }
-                    }
+                    val exif = files.exif(item)
+                    val photo = PhotoExif.from(exif)
+                    if (FileRules.isRaw(item)) info += "Format" to "RAW (${item.extension.uppercase()})"
+                    exif.getAttribute(ExifInterface.TAG_MODEL)?.let { info += "Aparat" to it }
+                    exif.getAttribute(ExifInterface.TAG_MAKE)?.let { info += "Producent" to it }
+                    photo.lens?.let { info += "Obiektyw" to it }
+                    photo.taken?.let { info += "Wykonano" to it }
+                    if (photo.width > 0) info += "Wymiary" to "${photo.width} × ${photo.height}" + (photo.megapixels?.let { " · $it" } ?: "")
+                    exif.getAttribute(ExifInterface.TAG_PHOTOGRAPHIC_SENSITIVITY)?.let { info += "ISO" to it }
+                    photo.aperture?.let { info += "Przysłona" to it }
+                    photo.shutter?.let { info += "Czas naświetlania" to it }
+                    photo.focal?.let { info += "Ogniskowa" to it }
+                    photo.bias?.let { info += "Korekta ekspozycji" to it }
+                    photo.program?.let { info += "Program" to it }
+                    photo.flash?.let { info += "Lampa" to it }
+                    photo.whiteBalance?.let { info += "Balans bieli" to it }
+                    photo.software?.let { info += "Oprogramowanie" to it }
+                    photo.gps?.let { info += "GPS" to "%.6f, %.6f".format(java.util.Locale.ROOT, it.first, it.second) }
                 }.onFailure { info += "EXIF" to "Brak metadanych lub nieobsługiwany format" }
+                if (FileRules.isVideo(item) || FileRules.isAudio(item)) runCatching { info += mediaInfo(item) }
+                if (FileRules.isApk(item) && rootOf(item.place)?.direct == true) runCatching {
+                    val pm = context.packageManager
+                    val path = files.file(item.place).path
+                    pm.getPackageArchiveInfo(path, 0)?.let { pkg ->
+                        pkg.applicationInfo?.let { ai -> ai.sourceDir = path; ai.publicSourceDir = path; info += "Aplikacja" to pm.getApplicationLabel(ai).toString() }
+                        info += "Pakiet" to pkg.packageName
+                        info += "Wersja aplikacji" to "${pkg.versionName} (${androidx.core.content.pm.PackageInfoCompat.getLongVersionCode(pkg)})"
+                        val installed = runCatching { pm.getPackageInfo(pkg.packageName, 0) }.getOrNull()
+                        info += "Zainstalowana" to (installed?.versionName ?: "nie")
+                    }
+                }
                 if (FileRules.isZip(item)) runCatching { files.zipEntries(item, 10_000) }.onSuccess { list -> info += "Archiwum" to "${list.count { !it.first.endsWith('/') }} plików, rozpakowane ${formatSize(list.sumOf { it.second.coerceAtLeast(0) })}" }
-                Details(item, info, if (FileRules.isImage(item) || FileRules.isVideo(item)) runCatching { item.localUri ?: files.uri(item) }.getOrNull() else null)
+                Details(item, info, if (FileRules.isMedia(item)) runCatching { item.imageModel() ?: files.uri(item) }.getOrNull() else null)
             }
             details = result
         }
@@ -415,9 +497,9 @@ class ExplorerModel(app: Application) : AndroidViewModel(app) {
     fun open(item: Item) {
         when {
             item.directory -> navigate(item.place)
-            FileRules.isImage(item) && (item.localUri != null || rootOf(item.place)?.network == false) -> {
-                val images = visible.filter { FileRules.isImage(it) && it.localUri != null }.ifEmpty { listOf(item) }
-                viewer = images to images.indexOfFirst { it.place == item.place }.coerceAtLeast(0)
+            FileRules.isMedia(item) && item.localUri != null -> {
+                val media = visible.filter { FileRules.isMedia(it) && it.localUri != null }.ifEmpty { listOf(item) }
+                viewer = media to media.indexOfFirst { it.place == item.place }.coerceAtLeast(0)
             }
             FileRules.isText(item) && item.size <= 2 * 1024 * 1024 -> openEditor(item)
             FileRules.isZip(item) -> operation("Czytanie archiwum") { archive = ArchiveState(item, withContext(Dispatchers.IO) { files.zipEntries(item) }) }
@@ -548,6 +630,150 @@ class ExplorerModel(app: Application) : AndroidViewModel(app) {
         }
     }
     val certificate: String? by lazy { Updates.installedCertificate(context) }
+
+    private fun mediaInfo(item: Item): List<Pair<String, String>> {
+        val r = android.media.MediaMetadataRetriever()
+        val result = mutableListOf<Pair<String, String>>()
+        try {
+            val uri = item.localUri ?: files.uri(item) ?: return result
+            if (uri.scheme == "file") r.setDataSource(uri.path) else r.setDataSource(context, uri)
+            fun meta(key: Int) = r.extractMetadata(key)?.takeIf { it.isNotBlank() }
+            meta(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull()?.let { ms ->
+                result += "Czas trwania" to if (ms >= 3600000) "%d:%02d:%02d".format(ms / 3600000, ms / 60000 % 60, ms / 1000 % 60) else "%d:%02d".format(ms / 60000, ms / 1000 % 60)
+            }
+            val w = meta(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH); val h = meta(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)
+            if (w != null && h != null) result += "Rozdzielczość" to "$w × $h"
+            meta(android.media.MediaMetadataRetriever.METADATA_KEY_BITRATE)?.toLongOrNull()?.let { result += "Przepływność" to "${it / 1000} kb/s" }
+            meta(android.media.MediaMetadataRetriever.METADATA_KEY_TITLE)?.let { result += "Tytuł" to it }
+            meta(android.media.MediaMetadataRetriever.METADATA_KEY_ARTIST)?.let { result += "Wykonawca" to it }
+            meta(android.media.MediaMetadataRetriever.METADATA_KEY_ALBUM)?.let { result += "Album" to it }
+            meta(android.media.MediaMetadataRetriever.METADATA_KEY_YEAR)?.let { result += "Rok" to it }
+        } finally { runCatching { r.release() } }
+        return result
+    }
+
+    // ——— Kompaktowość ———
+    fun updateCompact(v: Boolean) { compact = v; prefs.setFlag("compact", v) }
+    fun updateGridSize(v: GridSize) { gridSize = v; prefs.setText("gridSize", v.name) }
+    fun clearRecentPlaces() { recentPlaces = emptyList(); prefs.savePlaces("recentPlaces", emptyList()) }
+
+    // ——— Wykrywanie NAS ———
+    fun scanNas() {
+        if (nasScanning) return
+        nasJob?.cancel(); nasHosts = emptyList(); nasProgress = 0f; nasScanning = true
+        nasJob = viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    NasDiscovery(context).scan({ !isActive }, { p -> viewModelScope.launch { nasProgress = p } }) { host ->
+                        viewModelScope.launch {
+                            // Nazwa z mDNS jest lepsza niż sam adres ze skanu.
+                            val existing = nasHosts.firstOrNull { it.address == host.address }
+                            nasHosts = if (existing == null) nasHosts + host else nasHosts.map { if (it.address == host.address && host.source == "mDNS") host else it }
+                        }
+                    }
+                }
+            } finally { nasScanning = false; nasProgress = 1f }
+        }
+    }
+    fun stopNasScan() { nasJob?.cancel(); nasScanning = false }
+    fun listShares(host: String, user: String, password: String, domain: String) {
+        if (nasSharesBusy) return
+        nasSharesBusy = true
+        viewModelScope.launch {
+            try { nasShares = host to withContext(Dispatchers.IO) { NasDiscovery(context).shares(host, user, password, domain) } }
+            catch (e: Exception) { error = "Nie można pobrać listy udziałów z $host: ${e.message}. Sprawdź login i hasło." }
+            finally { nasSharesBusy = false }
+        }
+    }
+    fun clearShares() { nasShares = null }
+
+    // ——— Masowa zmiana nazw ———
+    fun batchRename(pairs: List<Pair<Item, String>>) {
+        val changes = pairs.filter { it.first.name != it.second }
+        if (changes.isEmpty()) return
+        longOperation("Zmiana nazw ${changes.size} elem.") { report ->
+            withContext(Dispatchers.IO) {
+                require(pairs.map { it.second.lowercase() }.distinct().size == pairs.size) { "Nowe nazwy powtarzają się" }
+                changes.forEach { (_, name) -> FileRules.validateName(name) }
+                changes.forEach { (item, name) ->
+                    if (cancelRequested) throw CancellationException("Anulowano")
+                    files.rename(item, name); report(name, 1, changes.size.toLong())
+                }
+            }
+            selected = emptySet(); tree.clear(); refresh(); notice = "Zmieniono nazwy: ${changes.size}"
+        }
+    }
+
+    // ——— Analiza miejsca ———
+    /** Rozmiar każdego elementu folderu (rekurencyjnie), od największego – wyniki spływają na bieżąco. */
+    fun analyze(p: Place? = place) {
+        val target = p ?: return
+        analysisJob?.cancel()
+        analysis = Analysis(target, emptyList(), false)
+        analysisJob = viewModelScope.launch {
+            val items = try { withContext(Dispatchers.IO) { files.list(target) } } catch (e: Exception) { error = e.message; analysis = null; return@launch }
+            val results = mutableListOf<Pair<Item, Long>>()
+            for (item in items) {
+                if (!isActive) return@launch
+                val size = withContext(Dispatchers.IO) { runCatching { if (item.directory) files.measure(listOf(item)) { !isActive }.bytes else item.size }.getOrDefault(0L) }
+                results += item to size
+                analysis = Analysis(target, results.sortedByDescending { it.second }, false)
+            }
+            analysis = Analysis(target, results.sortedByDescending { it.second }, true)
+        }
+    }
+    /**
+     * Tryb sesji (jak Fotopodgląd): co 2 s sprawdza bieżący folder; nowe zdjęcia z aparatu lub karty Wi-Fi
+     * pojawiają się od razu, a przy włączonym [liveAutoShow] otwiera się najnowsze.
+     */
+    fun toggleLive() {
+        if (live) { stopLive(); return }
+        val target = place ?: return
+        live = true; liveNew = 0
+        liveJob = viewModelScope.launch {
+            var known = entries.map { it.place }.toSet()
+            try {
+                while (isActive && place == target) {
+                    delay(2000)
+                    val fresh = runCatching { withContext(Dispatchers.IO) { files.list(target) } }.getOrNull() ?: continue
+                    val added = fresh.filter { it.place !in known }
+                    known = fresh.map { it.place }.toSet()
+                    if (fresh.size != entries.size || added.isNotEmpty()) entries = fresh
+                    val media = added.filter { FileRules.isMedia(it) }
+                    if (media.isNotEmpty()) {
+                        liveNew += media.size
+                        notice = "Nowe: ${media.size} · ${media.last().name}"
+                        if (liveAutoShow) {
+                            val all = visible.filter { FileRules.isMedia(it) && it.localUri != null }
+                            val newest = media.maxBy { it.modified }
+                            all.indexOfFirst { it.place == newest.place }.takeIf { it >= 0 }?.let { viewer = all to it }
+                        }
+                    }
+                }
+            } finally { live = false }
+        }
+    }
+    fun updateLiveAutoShow(v: Boolean) { liveAutoShow = v; prefs.setFlag("liveAutoShow", v) }
+    suspend fun photoExif(item: Item): PhotoExif? = withContext(Dispatchers.IO) { runCatching { PhotoExif.from(files.exif(item)) }.getOrNull() }
+    fun closeAnalysis() { analysisJob?.cancel(); analysis = null }
+
+    // ——— Skróty na ekranie głównym ———
+    fun pinShortcut(p: Place) {
+        val intent = Intent(context, MainActivity::class.java).setAction(MainActivity.ACTION_OPEN_FOLDER)
+            .putExtra(MainActivity.EXTRA_ROOT, p.root).putExtra(MainActivity.EXTRA_PARTS, p.parts.toTypedArray())
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+        val shortcut = androidx.core.content.pm.ShortcutInfoCompat.Builder(context, "folder:" + p.toString().hashCode())
+            .setShortLabel(title(p).take(24)).setLongLabel(pathOf(p).take(60))
+            .setIcon(androidx.core.graphics.drawable.IconCompat.createWithResource(context, R.mipmap.ic_launcher)).setIntent(intent).build()
+        if (androidx.core.content.pm.ShortcutManagerCompat.isRequestPinShortcutSupported(context)) androidx.core.content.pm.ShortcutManagerCompat.requestPinShortcut(context, shortcut, null)
+        else notice = "Ekran główny nie obsługuje skrótów"
+    }
+    fun openShortcut(p: Place) {
+        if (roots.none { it.id == p.root }) { error = "Źródło skrótu nie jest już dostępne"; return }
+        val existing = tabs.indexOfFirst { it.place == p }
+        if (existing >= 0) switch(existing) else navigate(p, tabs.isNotEmpty())
+    }
+
 }
 
 fun formatSize(size: Long): String = when {

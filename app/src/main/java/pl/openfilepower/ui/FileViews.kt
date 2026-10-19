@@ -53,6 +53,7 @@ fun iconFor(item: Item): ImageVector = when {
 }
 fun iconFor(category: Category): ImageVector = when (category) {
     Category.IMAGES -> Icons.Rounded.Photo
+    Category.RAW -> Icons.Rounded.Camera
     Category.VIDEO -> Icons.Rounded.VideoLibrary
     Category.AUDIO -> Icons.Rounded.LibraryMusic
     Category.DOCUMENTS -> Icons.Rounded.Description
@@ -74,7 +75,7 @@ fun describe(item: Item): String = if (item.directory) (if (item.children >= 0) 
     ) {
         Icon(iconFor(item), null, Modifier.size(size * 0.52f), tint = if (item.directory) Color.White else Palette.TextDim)
         if (vm.thumbnails && item.localUri != null && (FileRules.isImage(item) || FileRules.isVideo(item))) {
-            AsyncImage(item.localUri, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+            AsyncImage(item.imageModel(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
             if (FileRules.isVideo(item)) Icon(Icons.Rounded.PlayCircle, null, Modifier.size(size * 0.4f), tint = Color.White)
         }
     }
@@ -95,17 +96,17 @@ fun describe(item: Item): String = if (item.directory) (if (item.children >= 0) 
         Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(if (selected) Color.White.copy(alpha = 0.12f) else Color.Transparent)
             .then(if (item.directory) Modifier.dropFolder(vm, item.place) else Modifier)
             .combinedClickable(onClick = { if (vm.selecting) vm.select(item) else vm.open(item) }, onLongClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); vm.select(item) })
-            .padding(horizontal = 8.dp, vertical = 7.dp),
+            .padding(horizontal = 8.dp, vertical = if (vm.compact) 3.dp else 7.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        FileGlyph(item, vm); Spacer(Modifier.width(12.dp))
+        FileGlyph(item, vm, size = if (vm.compact) 32.dp else 44.dp, corner = if (vm.compact) 8.dp else 12.dp); Spacer(Modifier.width(if (vm.compact) 10.dp else 12.dp))
         Column(Modifier.weight(1f)) {
-            Text(item.name, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Medium, color = if (item.hidden) Palette.TextDim else Color.White)
-            Text(if (showPath) vm.pathOf(item.place.parent() ?: item.place) else describe(item), color = Palette.TextDim, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(item.name, fontSize = if (vm.compact) 13.sp else 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Medium, color = if (item.hidden) Palette.TextDim else Color.White)
+            Text(if (showPath) vm.pathOf(item.place.parent() ?: item.place) else describe(item), color = Palette.TextDim, fontSize = if (vm.compact) 10.sp else 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         if (wide && !showPath) Text(formatDate(item.modified), color = Palette.TextFaint, fontSize = 11.sp, modifier = Modifier.padding(horizontal = 12.dp))
         if (vm.selecting) SelectionMark(selected, Modifier.padding(horizontal = 8.dp))
-        else RoundIcon(Icons.Rounded.Info, "Właściwości ${item.name}", size = 36.dp, flat = true, tint = Palette.TextFaint) { inspect(item) }
+        else RoundIcon(Icons.Rounded.Info, "Właściwości ${item.name}", size = if (vm.compact) 30.dp else 36.dp, flat = true, tint = Palette.TextFaint) { inspect(item) }
     }
 }
 

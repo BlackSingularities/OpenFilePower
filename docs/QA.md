@@ -16,6 +16,16 @@ Do wykonania na telefonie i tablecie; nie stanowią deklaracji wykonanych testó
 - Otwórz i udostępnij plik w innej aplikacji.
 - Aktualizacja: wyższa wersja, ta sama wersja, niezgodny SHA-256, niezgodny podpis, brak pozwolenia na instalację, brak sieci.
 
+## Od wersji 0.3
+
+- Galeria: oś czasu, albumy, filtry; zaznaczenie całego dnia; kopiowanie zdjęć z galerii do folderu.
+- RAW z kilku aparatów (np. ARW, NEF, CR3, RAF, DNG): miniatura, poprawna orientacja pionowych ujęć, EXIF, histogram.
+- Przeglądarka: zoom, film z dźwiękiem, maska przepaleń na prześwietlonym zdjęciu, pokaz slajdów, pasek miniatur.
+- Tryb sesji: wgraj nowe zdjęcie do obserwowanego folderu (lokalnie i na NAS) – pojawia się w ciągu ~2 s.
+- Wykrywanie NAS w domowej sieci Wi-Fi: serwer z mDNS i bez; lista udziałów z loginem i jako gość.
+- Masowa zmiana nazw: wzorzec z numeracją, kolizja nazw blokuje przycisk.
+- Skrót folderu na ekranie głównym otwiera właściwy folder także przy działającej aplikacji.
+
 ## Od wersji 0.2
 
 - Pełny dostęp do plików: nadaj uprawnienie, wróć do aplikacji – otwiera się katalog główny pamięci; cofnij uprawnienie – źródło znika.

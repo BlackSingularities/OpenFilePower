@@ -35,6 +35,7 @@ import pl.openfilepower.*
         }
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             NavRow(Icons.Rounded.Home, "Start", vm.view == View.Home) { vm.goHome(); done() }
+            NavRow(Icons.Rounded.PhotoLibrary, "Galeria", vm.view == View.Gallery) { vm.openGallery(); done() }
             NavRow(Icons.Rounded.DeleteOutline, "Kosz", vm.view == View.Trash) { vm.openTrash(); done() }
 
             val direct = vm.roots.filter { it.direct }

@@ -1,5 +1,21 @@
 # Zmiany
 
+## 0.3.0
+
+Menedżer plików połączony z przeglądarką zdjęć i wideo w duchu Fotopodglądu i PhotoManagera.
+
+- **Galeria** całej pamięci: oś czasu dzień po dniu, albumy (foldery z mediami), filtry Zdjęcia / RAW / Wideo, zaznaczanie całych dni.
+- **RAW**: ARW, NEF, CR2, CR3, RAF, DNG, RW2, ORF, PEF, SRW i inne – miniatury i podgląd z osadzonego JPEG (z obrotem wg EXIF, buforowane), pełny EXIF.
+- **Przeglądarka mediów**: zoom do 8×, odtwarzanie filmów, histogram RGB i jasności, maska przepaleń i niedoświetleń z procentem, plakietki ekspozycji (przysłona, czas, ISO, ogniskowa, korekta), pokaz slajdów, pasek miniatur.
+- **Tryb sesji na żywo**: folder sprawdzany co 2 s; nowe zdjęcia z aparatu lub karty Wi-Fi pojawiają się od razu i mogą otwierać się automatycznie (działa też na NAS).
+- **Automatyczne wykrywanie NAS** w sieci lokalnej (mDNS/Bonjour + skan portu SMB 445), lista udziałów serwera do wyboru, logowanie jako gość.
+- **Kompaktowy ekran startowy z karuzelami**: najnowsze zdjęcia, ostatnie pliki, foldery główne, kategorie, ostatnio odwiedzane foldery, nośniki obok siebie.
+- **Widok kompaktowy**, rozmiar siatki S/M/L, filtry typów w folderze (Foldery, Zdjęcia, Wideo, Audio, Dokumenty, Archiwa).
+- **Masowa zmiana nazw** z podglądem: wzorzec z numeracją `{n}`, `{nazwa}`, `{data}`, zamiana tekstu, przedrostek/przyrostek, wielkość liter.
+- **Analiza zajętego miejsca** folderu z paskami udziału.
+- **Skróty folderów na ekranie głównym** telefonu.
+- Właściwości: czas trwania, rozdzielczość i przepływność filmów, tagi audio, informacje o pakiecie APK, pełny EXIF (program, lampa, balans bieli, korekta, megapiksele).
+
 ## 0.2.0
 
 Pełnoprawny menedżer plików z interfejsem w stylu OpenPDF.

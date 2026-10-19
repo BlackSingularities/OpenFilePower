@@ -106,7 +106,14 @@ import pl.openfilepower.*
             CompactChoice(Icons.Rounded.GridView, "Układ", listOf(false, true), vm.grid, { if (it) "Siatka" else "Lista" }, icon = { if (it) Icons.Rounded.GridView else Icons.AutoMirrored.Rounded.ViewList }) { vm.updateGrid(it) }
             SwitchRow(Icons.Rounded.Visibility, "Ukryte pliki", "Pokazuj pliki i foldery zaczynające się od kropki", vm.showHidden) { vm.updateHidden(it) }
             SwitchRow(Icons.Rounded.Folder, "Foldery na początku", null, vm.foldersFirst) { vm.updateFoldersFirst(it) }
-            SwitchRow(Icons.Rounded.Image, "Miniatury", "Podgląd zdjęć i filmów na liście", vm.thumbnails) { vm.updateThumbnails(it) }
+            SwitchRow(Icons.Rounded.Image, "Miniatury", "Podgląd zdjęć, RAW-ów i filmów na liście", vm.thumbnails) { vm.updateThumbnails(it) }
+            SwitchRow(Icons.Rounded.Compress, "Widok kompaktowy", "Niższe wiersze – więcej plików na ekranie", vm.compact) { vm.updateCompact(it) }
+            CompactChoice(Icons.Rounded.PhotoSizeSelectLarge, "Rozmiar siatki i galerii", GridSize.entries, vm.gridSize, { it.label }) { vm.updateGridSize(it) }
+        }
+        Group("Zdjęcia i sesja") {
+            SwitchRow(Icons.Rounded.Sensors, "Auto-podgląd w trybie sesji", "Nowe zdjęcie z aparatu lub karty Wi-Fi otwiera się od razu", vm.liveAutoShow) { vm.updateLiveAutoShow(it) }
+            ActionRow(Icons.Rounded.PhotoLibrary, "Otwórz galerię", "Oś czasu, albumy, filtry Zdjęcia/RAW/Wideo") { close(); vm.openGallery() }
+            InfoRow(Icons.Rounded.Camera, "Obsługiwane RAW", RawFormats.extensions.sorted().joinToString(", ") { it.uppercase() })
         }
         Group("Sortowanie") {
             Chips(Icons.AutoMirrored.Rounded.Sort, "Sortuj według", Sort.entries, vm.sort, { it.label }) { vm.updateSort(it) }
