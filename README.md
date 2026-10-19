@@ -67,7 +67,7 @@ Wymagane sekrety Actions: `SIGNING_KEY` (keystore Base64), `SIGNING_STORE_PASSWO
 
 ## Weryfikacja urządzeniowa
 
-W CI wykonano 3 testy JVM oraz 7 testów na emulatorze Androida 15, z rzeczywistym serwerem Samba: zgodność bajtowa transferów SAF/SMB, polskie znaki w nazwach, konflikt nazw, przenoszenie, anulowanie, ochrona przed kopiowaniem do siebie, gest przeciągania, odczyt EXIF i układy telefonu/tabletu. Zobacz [wynik przebiegu](https://github.com/BlackSingularities/OpenFilePower/actions/runs/39195867514) i [scenariusze dodatkowej weryfikacji](docs/QA.md). Testy emulatora nie zastępują sprawdzenia konkretnego telefonu i modelu NAS.
+W CI wykonano 3 testy JVM oraz 7 testów na emulatorze Androida 15, z rzeczywistym serwerem Samba: zgodność bajtowa transferów SAF/SMB, polskie znaki w nazwach, konflikt nazw, przenoszenie, anulowanie, ochrona przed kopiowaniem do siebie, gest przeciągania, odczyt EXIF i układy telefonu/tabletu. Zobacz [wynik przebiegu](https://github.com/BlackSingularities/OpenFilePower/actions/runs/39228803885) i [scenariusze dodatkowej weryfikacji](docs/QA.md). Testy emulatora nie zastępują sprawdzenia konkretnego telefonu i modelu NAS.
 
 ## Licencja
 
