@@ -27,6 +27,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -44,7 +48,7 @@ import java.util.Locale
 @Composable fun GalleryScreen(vm: ExplorerModel, medium: Boolean, actions: BrowserActions) {
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize().padding(horizontal = if (medium) 18.dp else 8.dp)) {
-            Row(Modifier.fillMaxWidth().height(64.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(Modifier.fillMaxWidth().height(52.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 if (vm.selecting) {
                     RoundIcon(Icons.Rounded.Close, "Zakończ zaznaczanie") { vm.clearSelection() }
                     Text("Zaznaczono ${vm.selected.size}", fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f).padding(start = 4.dp))
@@ -53,12 +57,14 @@ import java.util.Locale
                     if (!medium) RoundIcon(Icons.Rounded.Menu, "Źródła i foldery", onClick = actions.menu)
                     RoundIcon(Icons.AutoMirrored.Rounded.ArrowBack, "Wstecz") { vm.back() }
                     Column(Modifier.weight(1f).padding(start = 4.dp)) {
-                        Text(vm.galleryAlbum?.let(vm::title) ?: "Galeria", fontSize = 20.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(vm.galleryAlbum?.let(vm::title) ?: "Galeria", fontSize = 18.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         val items = vm.visible
                         Text("${items.count { FileRules.isImage(it) }} zdjęć · ${items.count { FileRules.isVideo(it) }} filmów · ${formatSize(items.sumOf { it.size })}", fontSize = 11.sp, color = Palette.TextDim, maxLines = 1)
                     }
-                    vm.galleryAlbum?.let { album -> RoundIcon(Icons.Rounded.FolderOpen, "Otwórz folder albumu") { vm.navigate(album, vm.tabs.isNotEmpty()) } }
-                    RoundIcon(Icons.Rounded.Refresh, "Odśwież") { vm.refresh() }
+                    vm.galleryAlbum?.let { album -> RoundIcon(Icons.Rounded.FolderOpen, "Otwórz folder albumu", size = 40.dp) { vm.navigate(album, vm.tabs.isNotEmpty()) } }
+                    RoundIcon(if (vm.galleryByMonth) Icons.Rounded.CalendarViewMonth else Icons.Rounded.CalendarViewDay, if (vm.galleryByMonth) "Grupuj po dniach" else "Grupuj po miesiącach", size = 40.dp) { vm.updateGalleryByMonth(!vm.galleryByMonth) }
+                    RoundIcon(Icons.Rounded.PhotoSizeSelectLarge, "Rozmiar miniatur: ${vm.gridSize.label}", size = 40.dp) { vm.updateGridSize(GridSize.entries[(vm.gridSize.ordinal + 1) % GridSize.entries.size]) }
+                    RoundIcon(Icons.Rounded.Refresh, "Odśwież", size = 40.dp) { vm.refresh() }
                 }
             }
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -67,7 +73,7 @@ import java.util.Locale
                     Chip("Albumy", vm.galleryAlbums, icon = Icons.Rounded.PhotoAlbum) { vm.galleryAlbums = true }
                     Box(Modifier.padding(horizontal = 2.dp).width(1.dp).height(20.dp).background(Palette.Line))
                 }
-                MediaFilter.entries.forEach { f -> Chip(f.label, vm.galleryFilter == f) { vm.galleryFilter = f } }
+                if (vm.showFilters || vm.galleryFilter != MediaFilter.ALL) MediaFilter.entries.forEach { f -> Chip(f.label, vm.galleryFilter == f) { vm.galleryFilter = f } }
             }
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 when {
@@ -86,6 +92,9 @@ import java.util.Locale
     }
 }
 
+private val monthFormat = SimpleDateFormat("LLLL yyyy", Locale.getDefault())
+private fun monthLabel(time: Long): String = monthFormat.format(java.util.Date(time)).replaceFirstChar { it.uppercase() }
+
 private fun dayLabel(time: Long): String {
     val now = Calendar.getInstance(); val then = Calendar.getInstance().apply { timeInMillis = time }
     val sameYear = now.get(Calendar.YEAR) == then.get(Calendar.YEAR)
@@ -99,10 +108,34 @@ private fun dayLabel(time: Long): String {
 }
 
 @Composable private fun Timeline(vm: ExplorerModel, medium: Boolean) {
-    val items = vm.visible.sortedByDescending { it.modified }
-    val groups = remember(items) { items.groupBy { dayLabel(it.modified) } }
+    // Grupowanie liczone raz na zmianę danych, nie przy każdym przerysowaniu (szybsze przewijanie dużych galerii).
+    val source = vm.visible
+    val byMonth = vm.galleryByMonth
+    val groups = remember(source.size, source.firstOrNull(), source.lastOrNull(), byMonth, vm.galleryAlbum, vm.galleryFilter) {
+        source.sortedByDescending { it.modified }.groupBy { if (byMonth) monthLabel(it.modified) else dayLabel(it.modified) }
+    }
     val cell = when (vm.gridSize) { GridSize.SMALL -> if (medium) 96 else 72; GridSize.MEDIUM -> if (medium) 130 else 100; GridSize.LARGE -> if (medium) 190 else 150 }
-    LazyVerticalGrid(GridCells.Adaptive(cell.dp), horizontalArrangement = Arrangement.spacedBy(3.dp), verticalArrangement = Arrangement.spacedBy(3.dp), contentPadding = PaddingValues(bottom = 120.dp)) {
+    // Szczypanie zmienia rozmiar miniatur jak w aplikacji Zdjęcia.
+    var pinch by remember { mutableFloatStateOf(1f) }
+    val zoom = Modifier.pointerInput(Unit) {
+        awaitEachGesture {
+            awaitFirstDown(requireUnconsumed = false)
+            pinch = 1f
+            do {
+                val event = awaitPointerEvent()
+                if (event.changes.size > 1) {
+                    pinch *= event.calculateZoom()
+                    val sizes = GridSize.entries
+                    when {
+                        pinch > 1.35f -> { vm.updateGridSize(sizes[(vm.gridSize.ordinal + 1).coerceAtMost(sizes.lastIndex)]); pinch = 1f }
+                        pinch < 0.75f -> { vm.updateGridSize(sizes[(vm.gridSize.ordinal - 1).coerceAtLeast(0)]); pinch = 1f }
+                    }
+                    event.changes.forEach { it.consume() }
+                }
+            } while (event.changes.any { it.pressed })
+        }
+    }
+    LazyVerticalGrid(GridCells.Adaptive(cell.dp), modifier = zoom, horizontalArrangement = Arrangement.spacedBy(3.dp), verticalArrangement = Arrangement.spacedBy(3.dp), contentPadding = PaddingValues(bottom = 120.dp)) {
         groups.forEach { (label, dayItems) ->
             item(span = { GridItemSpan(maxLineSpan) }, key = "h:$label") {
                 Row(Modifier.padding(start = 4.dp, top = 14.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -138,7 +171,7 @@ private fun dayLabel(time: Long): String {
 }
 
 @Composable private fun Albums(vm: ExplorerModel, medium: Boolean) {
-    val albums = vm.albums
+    val albums = remember(vm.entries) { vm.albums }
     LazyVerticalGrid(GridCells.Adaptive(if (medium) 180.dp else 150.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(bottom = 120.dp)) {
         items(albums, key = { it.first.toString() }) { (place, items, latest) ->
             Column(Modifier.pressable(vm.title(place)) { vm.showAlbum(place) }) {

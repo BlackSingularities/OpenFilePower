@@ -1,5 +1,17 @@
 # Zmiany
 
+## Niewydane
+
+- Karty na samej górze; nazwa miejsca tylko w karcie – nagłówek pokazuje ścieżkę nadrzędną zamiast powtarzać nazwę.
+- Kompaktowy interfejs (domyślnie): niższe nagłówki i mniejsze przyciski.
+- Pasek filtrów typów (Wszystko · Foldery · Zdjęcia · Wideo…) włączany w ustawieniach lub menu ⋮; domyślnie ukryty.
+- Tryb na żywo zawsze otwiera nowe zdjęcie – usunięto osobną opcję auto-podglądu.
+- Uporządkowany pulpit: jedna sekcja „Miejsca” (foldery główne, ulubione, źródła), kategorie jako zwarte pigułki, bez zdublowanych skrótów.
+- Galeria: grupowanie po dniach lub miesiącach, zmiana rozmiaru miniatur szczypaniem i przyciskiem, szybsze przewijanie.
+- EXIF: pamięć podręczna i wczytywanie z wyprzedzeniem sąsiednich zdjęć w przeglądarce.
+- Właściwości otwarte z przeglądarki zdjęć pokazują się nad nią (wcześniej trzeba było ją zamknąć).
+- Skróty folderów na ekranie głównym mają własną ikonę z wersją jednokolorową (motywy ikon Androida 13+).
+
 ## 0.3.1
 
 - Naprawiono zamykanie się aplikacji po zakończeniu wykrywania serwerów NAS (wątek rozpoznawania nazw mDNS był przerywany w sposób, który zabijał proces).
