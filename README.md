@@ -1,74 +1,54 @@
 # OpenFilePower
 
-Natywny menedżer plików dla Androida — wiele folderów, jedna przestrzeń. Kotlin, Jetpack Compose i Material 3, bez reklam i telemetrii.
+Pełnoprawny menedżer plików dla Androida – cała pamięć urządzenia, karty SD, foldery systemowe i NAS w jednej przestrzeni z kartami. Kotlin, Jetpack Compose, czarno-biały interfejs wspólny z [OpenPDF](https://github.com/BlackSingularities/OpenPDF). Bez reklam i telemetrii.
 
 [![Android](https://github.com/BlackSingularities/OpenFilePower/actions/workflows/android.yml/badge.svg)](https://github.com/BlackSingularities/OpenFilePower/actions/workflows/android.yml)
 
-![OpenFilePower na tablecie](docs/screenshots/tablet.png)
-
-<details><summary>Widok na telefonie</summary>
-
-<img src="docs/screenshots/phone.png" alt="OpenFilePower na telefonie" width="320" />
-
-</details>
-
 ## Instalacja
 
-Pobierz `OpenFilePower.apk` z [najnowszego wydania](https://github.com/BlackSingularities/OpenFilePower/releases/latest), otwórz APK i zaakceptuj instalację w Androidzie. Wymagany Android 8.0 lub nowszy.
+Pobierz **[OpenFilePower.apk](https://github.com/BlackSingularities/OpenFilePower/releases/latest/download/OpenFilePower.apk)** z najnowszego wydania i zainstaluj (Android 8.0+). Przy pierwszym uruchomieniu nadaj **pełny dostęp do plików** – aplikacja od razu otworzy katalog główny pamięci. Kolejne wersje instalują się z poziomu aplikacji.
 
 ## Możliwości
 
 | Obszar | Funkcje |
 | --- | --- |
-| Przestrzeń robocza | Niezależne karty folderów, zapisywanie kart, historia, okruszki ścieżki |
-| Nawigacja | Rozwijane drzewo, ulubione, wiele źródeł, nowa karta przez przytrzymanie pozycji drzewa |
-| Pliki | Kopiuj, wytnij, wklej, wielokrotny wybór, nowe foldery, zmiana nazw, trwałe usuwanie z potwierdzeniem |
-| Przeciąganie | Przytrzymaj ikonę pliku; upuść na folder, kartę lub drzewo, aby skopiować |
-| Sieć | NAS przez SMB 2/3, logowanie użytkownik/hasło/domena, kopiowanie lokalnie ↔ NAS |
-| Widok | Lista i siatka, filtrowanie nazw w bieżącym folderze, sortowanie, ukryte pliki |
-| Zdjęcia | Lokalny podgląd, EXIF: aparat, obiektyw, ISO, czas, przysłona, GPS (jeśli zapisano) |
-| Tablet | Stały lewy panel od 720 dp i prawy inspektor od 1000 dp; na telefonie panele wysuwane |
-| Aktualizacje | Automatyczne sprawdzanie przy uruchomieniu, pobieranie APK, SHA-256, kontrola pakietu i podpisu |
+| Pamięć | Pełny dostęp do pamięci wewnętrznej i kart SD, zajętość nośników, foldery główne, foldery SAF (USB, chmura), NAS SMB 2/3 |
+| Przestrzeń robocza | Niezależne karty folderów, historia, okruszki ścieżki, drzewo folderów w panelu bocznym, ulubione |
+| Pliki | Kopiuj, wytnij, wklej, przeciągnij i upuść, zmiana nazwy, nowy folder i plik, wielokrotny wybór, odwracanie zaznaczenia |
+| Bezpieczeństwo danych | Kosz z przywracaniem, pytanie o konflikty nazw (zachowaj oba / pomiń / zastąp), ochrona przed kopiowaniem folderu do siebie |
+| Archiwa | Pakowanie do ZIP, podgląd i rozpakowywanie (z ochroną przed złośliwymi ścieżkami) |
+| Wyszukiwanie | Filtr bieżącego folderu, wyszukiwanie w podfolderach z `*`, kategorie: obrazy, wideo, muzyka, dokumenty, archiwa, APK, pobrane, duże pliki |
+| Podgląd | Przeglądarka zdjęć z powiększaniem, edytor tekstu, miniatury zdjęć i filmów, właściwości z EXIF, rozmiarem folderu, SHA-256 i MD5 |
+| Transfery | Postęp w procentach i prędkość, anulowanie, praca w tle z powiadomieniem, natychmiastowe przenoszenie na tym samym nośniku |
+| Tablet | Stały panel boczny od 720 dp, inspektor właściwości od 1000 dp; na telefonie szuflada i panele |
+| Aktualizacje | Sprawdzanie przy starcie, pobieranie z GitHub Releases, kontrola SHA-256, pakietu, wersji i certyfikatu podpisu |
 
-## Pierwsze uruchomienie
+## Dostęp do plików i ograniczenia Androida
 
-1. Wybierz **Wybierz pierwszy folder**. W systemowym oknie udziel dostępu do konkretnego folderu. Możesz dodać kilka folderów, także z karty SD lub USB, jeżeli udostępnia je system.
-2. Dla NAS wybierz **Połącz z NAS**. Podaj host/IP, nazwę udziału (bez ścieżki), login i hasło. Serwer musi być osiągalny z sieci telefonu, np. przez Wi-Fi lub VPN.
-3. Otwórz nową kartę przyciskiem `+`. Zaznacz pliki checkboxami, wybierz Kopiuj/Wytnij, przejdź do celu i wybierz Wklej.
-4. Ikona ⓘ pokazuje właściwości. Na mniejszych ekranach otwórz panel przyciskiem ⓘ w górnym pasku.
-
-## Bezpieczeństwo danych i ograniczenia v0.1
-
-- Aplikacja ma dostęp tylko do folderów wybranych przez użytkownika. Ograniczenia Androida dotyczące katalogów głównych, `Android/data` i `Android/obb` nadal obowiązują.
-- Hasła SMB są szyfrowane AES-GCM kluczem Android Keystore. Backup danych aplikacji jest wyłączony. SMB1 nie jest włączany. SMB działa w zaufanej sieci lub VPN; nie wystawiaj serwera bezpośrednio do Internetu.
-- Konflikt nazw zatrzymuje kopiowanie zamiast nadpisywać dane. Przy przenoszeniu źródło usuwane jest dopiero po skopiowaniu elementu. Wieloelementowe operacje nie są transakcją: wcześniej ukończone elementy pozostają w celu po błędzie/anulowaniu.
-- Transfery działają w procesie aplikacji; trzymaj ją otwartą podczas dużych operacji. Nie ma jeszcze usługi transferów w tle ani wznawiania po zabiciu procesu.
-- Anulowanie dotyczy transferów; usuń/zmień nazwę nie są odwracalne. Nie ma kosza. Automatyczne scalanie folderów i nadpisywanie nie są obsługiwane.
-- Nie dodawaj tego samego fizycznego folderu pod różnymi źródłami. Wykrywanie kopiowania do własnego podfolderu operuje na ścieżkach źródeł; aliasy serwerów, dowiązania i nakładające się uprawnienia SAF wymagają ostrożności.
-- Obsługiwany protokół sieciowy: SMB. SFTP, FTP, WebDAV i automatyczne wykrywanie NAS nie są jeszcze zaimplementowane.
-- Podgląd w panelu dotyczy zdjęć lokalnych; EXIF można odczytywać też z NAS. Pliki sieciowe otwierane w innych aplikacjach są najpierw kopiowane do prywatnego cache. Nie ma edytora EXIF, archiwizatora ani rekursywnego indeksowania wyszukiwania.
-- Aktualizator sprawdza przy zimnym uruchomieniu aplikacji (można wyłączyć w ustawieniach). Pobranie i instalacja wymagają działania użytkownika; Android nie zezwala zwykłym aplikacjom na ciche instalowanie aktualizacji.
+- Pełny dostęp to systemowe uprawnienie „Dostęp do wszystkich plików” (Android 11+) albo uprawnienia pamięci (Android 8–10). Bez niego można pracować na folderach wybranych przez system i na NAS.
+- Od Androida 11 system blokuje wszystkim menedżerom plików bez roota bezpośredni dostęp do `Android/data` i `Android/obb`. Na Androidzie 11–12 aplikacja oferuje dostęp przez okno systemowe (Ustawienia → „Dostęp do Android/data”); na 13+ nie jest to możliwe.
+- Kosz działa w pamięci wewnętrznej (ukryty folder `.OpenFilePowerKosz`); w folderach SAF i na NAS usuwanie jest trwałe – aplikacja o tym informuje.
+- Hasła SMB są szyfrowane AES-GCM kluczem Android Keystore; SMB1 jest wyłączony. Używaj SMB w zaufanej sieci lub przez VPN.
+- Wieloelementowe operacje nie są transakcją: po anulowaniu ukończone elementy pozostają w celu.
 
 ## Budowanie
 
-JDK 17, Android SDK 35, Gradle Wrapper 8.11.1:
+JDK 17+, Android SDK 36, Gradle Wrapper 8.14:
 
 ```sh
 ./gradlew testDebugUnitTest lintDebug assembleDebug
 ```
 
-Na Windows użyj `gradlew.bat`. W Android Studio otwórz katalog repozytorium. `local.properties` z `sdk.dir` pozostaje lokalny.
+Wersja debug ma pakiet `pl.openfilepower.debug`, więc instaluje się obok wydania i nie powoduje konfliktu podpisów.
 
 ## Wydania i podpis
 
-GitHub Actions sprawdza testy i lint, buduje debug APK przy push/PR. Tag `vX.Y.Z` uruchamia dodatkowo podpisany build release i publikuje APK z sumą SHA-256. Przed tagiem zmień **versionName i versionCode** w `app/build.gradle.kts`; versionCode musi rosnąć. Wydanie musi zawierać pliki o nazwach `OpenFilePower.apk` i `OpenFilePower.apk.sha256`.
+Każdy push na `main` buduje podpisany APK i publikuje wydanie: wersja z pliku `VERSION`, a gdy taki tag już istnieje – z numerem kompilacji (np. `0.2.0.57`). Notatki pochodzą z `CHANGELOG.md`. Commit z `[skip release]` nie tworzy wydania.
 
-Wymagane sekrety Actions: `SIGNING_KEY` (keystore Base64), `SIGNING_STORE_PASSWORD`, `SIGNING_KEY_PASSWORD`. Alias klucza: `openfilepower`. Klucz podpisujący należy bezpiecznie zachować — jego utrata uniemożliwi instalowanie aktualizacji na istniejących instalacjach. Prywatne klucze nie są częścią repozytorium.
+CI sprawdza, czy APK jest podpisany certyfikatem o SHA-256 `470753b8716af4f6d59539aadacc0d9eadb17eabca4de18f6524a5ff2ae2fddb` (wartość `releaseCertSha256` w `app/build.gradle.kts`) – inne podpisanie przerywa wydanie, bo zainstalowane kopie nie mogłyby się zaktualizować. Sekrety Actions: `SIGNING_KEY` (keystore Base64), `SIGNING_STORE_PASSWORD`, `SIGNING_KEY_PASSWORD`, alias `openfilepower`. Lokalnie `assembleRelease` używa `.secrets/release.jks` (poza repozytorium). Utrata klucza uniemożliwi aktualizacje istniejących instalacji – przechowuj kopię zapasową.
 
-## Weryfikacja urządzeniowa
-
-W CI wykonano 3 testy JVM oraz 7 testów na emulatorze Androida 15, z rzeczywistym serwerem Samba: zgodność bajtowa transferów SAF/SMB, polskie znaki w nazwach, konflikt nazw, przenoszenie, anulowanie, ochrona przed kopiowaniem do siebie, gest przeciągania, odczyt EXIF i układy telefonu/tabletu. Zobacz [wynik przebiegu](https://github.com/BlackSingularities/OpenFilePower/actions/runs/39228803885) i [scenariusze dodatkowej weryfikacji](docs/QA.md). Testy emulatora nie zastępują sprawdzenia konkretnego telefonu i modelu NAS.
+Jeśli Android zgłasza konflikt podpisu przy instalacji, na telefonie jest kopia podpisana innym kluczem (np. lokalna kompilacja sprzed 0.2). Odinstaluj ją raz i zainstaluj APK z wydania.
 
 ## Licencja
 
-MIT. Zależności zachowują własne licencje (m.in. jcifs-ng: LGPL-2.1). Zobacz [informacje o komponentach](NOTICE.md).
+MIT. Zależności zachowują własne licencje (m.in. jcifs-ng: LGPL-2.1). Zobacz [informacje o komponentach](NOTICE.md) i [scenariusze weryfikacji](docs/QA.md).

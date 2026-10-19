@@ -47,4 +47,8 @@ class Preferences(context: Context) {
     var autoUpdate: Boolean
         get() = prefs.getBoolean("autoUpdate", true)
         set(value) { prefs.edit().putBoolean("autoUpdate", value).apply() }
+    fun flag(key: String, default: Boolean) = prefs.getBoolean(key, default)
+    fun setFlag(key: String, value: Boolean) = prefs.edit().putBoolean(key, value).apply()
+    fun text(key: String, default: String) = prefs.getString(key, default) ?: default
+    fun setText(key: String, value: String) = prefs.edit().putString(key, value).apply()
 }

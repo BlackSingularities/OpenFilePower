@@ -1,1 +1,7 @@
-<paths xmlns:android="http://schemas.android.com/apk/res/android"><cache-path name="exports" path="exports/" /><cache-path name="updates" path="updates/" /></paths>
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <cache-path name="exports" path="exports/" />
+    <cache-path name="updates" path="updates/" />
+    <external-path name="storage" path="." />
+    <!-- Karty SD i pamięci USB (pełny dostęp do pamięci). -->
+    <root-path name="volumes" path="storage/" />
+</paths>

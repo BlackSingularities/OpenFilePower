@@ -15,3 +15,16 @@ Do wykonania na telefonie i tablecie; nie stanowią deklaracji wykonanych testó
 - Obróć tablet; sprawdź układy 360 / 800 / 1280 dp, duży tekst systemowy i TalkBack.
 - Otwórz i udostępnij plik w innej aplikacji.
 - Aktualizacja: wyższa wersja, ta sama wersja, niezgodny SHA-256, niezgodny podpis, brak pozwolenia na instalację, brak sieci.
+
+## Od wersji 0.2
+
+- Pełny dostęp do plików: nadaj uprawnienie, wróć do aplikacji – otwiera się katalog główny pamięci; cofnij uprawnienie – źródło znika.
+- Android 11–12: Ustawienia → „Dostęp do Android/data”; Android 13+: komunikat o blokadzie systemu.
+- Kosz: usuń plik i folder z pamięci wewnętrznej, przywróć (także gdy w miejscu docelowym jest już taka nazwa), opróżnij kosz.
+- Konflikty przy wklejaniu: Zachowaj oba, Pomiń, Zastąp (plik oraz scalanie folderów); kopiowanie w tym samym folderze tworzy „nazwa (2)”.
+- Przenoszenie w obrębie pamięci wewnętrznej działa natychmiast (bez kopiowania danych).
+- ZIP: spakuj pliki i foldery, podejrzyj archiwum, rozpakuj archiwum z Windows (nazwy CP437) i z polskimi znakami.
+- Wyszukiwanie w podfolderach z `*`, zatrzymanie wyszukiwania, „Pokaż w folderze”.
+- Edytor tekstu: zmiana, zapis, zamknięcie z niezapisanymi zmianami. Przeglądarka zdjęć: przesuwanie i powiększanie.
+- Transfer w tle: zablokuj ekran podczas kopiowania dużego pliku – powiadomienie pokazuje postęp, operacja kończy się poprawnie.
+- Aktualizacja z poziomu aplikacji z wersji 0.1.0 do najnowszego wydania (ten sam certyfikat).

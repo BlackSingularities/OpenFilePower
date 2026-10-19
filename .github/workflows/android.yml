@@ -2,11 +2,13 @@ name: Android
 on:
   push:
     branches: [main]
-    tags: ['v*']
   pull_request:
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: false
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -21,7 +23,7 @@ jobs:
           packages: platform-tools
           log-accepted-android-sdk-licenses: false
       - uses: gradle/actions/setup-gradle@v4
-      - name: Verify and build
+      - name: Testy, lint i build debug
         run: |
           chmod +x gradlew
           ./gradlew testDebugUnitTest lintDebug assembleDebug
@@ -31,14 +33,19 @@ jobs:
           path: |
             app/build/outputs/apk/debug/*.apk
             app/build/reports/
+
+  # Każdy push na main = nowe wydanie. Wersja z pliku VERSION; gdy tag już istnieje,
+  # dostaje numer kompilacji (np. 0.2.0.57). versionCode rośnie z każdym przebiegiem.
   release:
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && !contains(github.event.head_commit.message, '[skip release]')
     needs: build
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -48,24 +55,50 @@ jobs:
           packages: platform-tools
           log-accepted-android-sdk-licenses: false
       - uses: gradle/actions/setup-gradle@v4
-      - name: Decode signing key
+      - name: Wersja
+        id: ver
+        run: |
+          BASE=$(tr -d '[:space:]' < VERSION)
+          NAME="$BASE"
+          if git rev-parse -q --verify "refs/tags/v$BASE" >/dev/null; then NAME="$BASE.${{ github.run_number }}"; fi
+          echo "base=$BASE" >> "$GITHUB_OUTPUT"
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          echo "code=$(( ${{ github.run_number }} + 100 ))" >> "$GITHUB_OUTPUT"
+      - name: Klucz podpisu
         env:
           SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
-        run: echo "$SIGNING_KEY" | base64 --decode > "$RUNNER_TEMP/release.jks"
-      - name: Build signed APK
+        run: |
+          if [ -z "$SIGNING_KEY" ]; then echo "::error::Brak sekretu SIGNING_KEY – wydanie nie może być podpisane"; exit 1; fi
+          echo "$SIGNING_KEY" | base64 --decode > "$RUNNER_TEMP/release.jks"
+      - name: Podpisany APK
         env:
           SIGNING_KEY_PATH: ${{ runner.temp }}/release.jks
           SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
           SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
         run: |
           chmod +x gradlew
-          ./gradlew assembleRelease
+          ./gradlew assembleRelease -PversionName=${{ steps.ver.outputs.name }} -PversionCode=${{ steps.ver.outputs.code }}
           cp app/build/outputs/apk/release/app-release.apk OpenFilePower.apk
           sha256sum OpenFilePower.apk > OpenFilePower.apk.sha256
-      - name: Publish release
+      - name: Weryfikacja podpisu
+        run: |
+          # Wydanie musi być podpisane tym samym certyfikatem co poprzednie – inaczej aktualizacje na telefonach się nie zainstalują.
+          EXPECTED=$(grep -oP 'releaseCertSha256 = "\K[0-9a-f]{64}' app/build.gradle.kts)
+          APKSIGNER=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)apksigner
+          "$APKSIGNER" verify --verbose --print-certs OpenFilePower.apk | tee signature.txt
+          ACTUAL=$(grep -m1 'Signer #1 certificate SHA-256 digest' signature.txt | awk '{print $NF}')
+          if [ "$ACTUAL" != "$EXPECTED" ]; then echo "::error::Certyfikat APK ($ACTUAL) różni się od oczekiwanego ($EXPECTED)"; exit 1; fi
+          grep -q 'Verified using v2 scheme (APK Signature Scheme v2): true' signature.txt
+      - name: Publikacja wydania
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" OpenFilePower.apk OpenFilePower.apk.sha256 --title "OpenFilePower $GITHUB_REF_NAME" --notes-file docs/RELEASE.md
-      - name: Remove signing key
+          NAME: ${{ steps.ver.outputs.name }}
+          BASE: ${{ steps.ver.outputs.base }}
+        run: |
+          NOTES=$(awk -v v="$BASE" '$0 == "## " v { f=1; next } f && /^## / { exit } f { print }' CHANGELOG.md)
+          if [ "$NAME" != "$BASE" ]; then NOTES=$(printf 'Poprawki i ulepszenia:\n\n%s' "$(git log -8 --pretty='- %s' "$GITHUB_SHA")"); fi
+          FOOTER=$(printf -- '---\n**Instalacja:** pobierz **OpenFilePower.apk** (Android 8+). Zainstalowana aplikacja zaktualizuje się sama.\n\nCertyfikat podpisu SHA-256: `%s`' "$(grep -oP 'releaseCertSha256 = "\K[0-9a-f]{64}' app/build.gradle.kts)")
+          gh release create "v$NAME" OpenFilePower.apk OpenFilePower.apk.sha256 --target "$GITHUB_SHA" --title "OpenFilePower $NAME" --notes "$(printf '%s\n\n%s' "$NOTES" "$FOOTER")" --latest
+      - name: Usunięcie klucza
         if: always()
         run: rm -f "$RUNNER_TEMP/release.jks"

@@ -1,0 +1,5 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <!-- Folder z błyskawicą: biały znak na czarnym tle, jak w OpenPDF. -->
+    <path android:fillColor="#FFFFFFFF" android:pathData="M30,38a5,5 0,0 1,5 -5h12.5l5,5.5h20.5a5,5 0,0 1,5 5v24.5a5,5 0,0 1,-5 5h-38a5,5 0,0 1,-5 -5z"/>
+    <path android:fillColor="#FF0B0C10" android:pathData="M57,44l-12.5,15h8.5l-2.5,10.5 13,-15.5h-8.5z"/>
+</vector>

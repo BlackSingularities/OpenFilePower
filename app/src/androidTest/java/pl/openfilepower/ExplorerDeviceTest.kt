@@ -25,7 +25,7 @@ class ExplorerDeviceTest {
     private val context get() = InstrumentationRegistry.getInstrumentation().targetContext
     private val uri = DocumentsContract.buildTreeDocumentUri("pl.openfilepower.test.documents", "root")
     private val local = Root("qa", "Moje pliki", uri.toString())
-    @Before fun disableUpdateChecks() { Preferences(context).autoUpdate = false }
+    @Before fun disableUpdateChecks() { Preferences(context).apply { autoUpdate = false; setFlag("askedNotifications", true); setFlag("grid", false) } }
     private fun awaitCondition(condition: () -> Boolean) {
         val until = android.os.SystemClock.elapsedRealtime() + 15000
         while (!condition() && android.os.SystemClock.elapsedRealtime() < until) android.os.SystemClock.sleep(100)
