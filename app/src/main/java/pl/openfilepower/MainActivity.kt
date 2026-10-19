@@ -173,7 +173,6 @@ class MainActivity : ComponentActivity() {
     if (newFolder) NameDialog("Nowy folder", "", { newFolder = false }) { vm.mkdir(it); newFolder = false }
     rename?.let { item -> NameDialog("Zmień nazwę", item.name, { rename = null }) { vm.rename(item, it); rename = null } }
     if (deleting) AlertDialog(onDismissRequest = { deleting = false }, icon = { Icon(Icons.Outlined.DeleteOutline, null) }, title = { Text("Usunąć ${vm.selected.size} elementów?") }, text = { Text("Pliki zostaną trwale usunięte, wraz z zawartością zaznaczonych folderów. Tej operacji nie można cofnąć.") }, confirmButton = { TextButton(onClick = { vm.deleteSelected(); deleting = false }) { Text("Usuń trwale", color = MaterialTheme.colorScheme.error) } }, dismissButton = { TextButton(onClick = { deleting = false }) { Text("Anuluj") } })
-    vm.error?.let { message -> AlertDialog(onDismissRequest = { vm.error = null }, title = { Text("Nie udało się wykonać operacji") }, text = { Text(message) }, confirmButton = { TextButton(onClick = { vm.error = null }) { Text("Rozumiem") } }) }
     if (settings) AlertDialog(onDismissRequest = { settings = false }, title = { Text("OpenFilePower") }, text = {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Wersja ${BuildConfig.VERSION_NAME} · Android 8+")
@@ -185,6 +184,7 @@ class MainActivity : ComponentActivity() {
         }
     }, confirmButton = { TextButton(onClick = { vm.checkUpdates(); settings = false }, enabled = !vm.updateBusy) { Text("Sprawdź aktualizacje") } }, dismissButton = { TextButton(onClick = { settings = false }) { Text("Zamknij") } })
     vm.release?.let { release -> AlertDialog(onDismissRequest = { if (!vm.updateBusy) vm.release = null }, title = { Text("Nowa wersja ${release.version}") }, text = { Column { Text(release.notes.take(2000), Modifier.heightIn(max = 300.dp).verticalScroll(rememberScrollState())); Spacer(Modifier.height(12.dp)); Text("APK z GitHub Releases. Sprawdzamy SHA-256 i podpis aplikacji. Instalację potwierdzisz w Androidzie.", fontSize = 12.sp, color = Muted); if (vm.updateBusy) LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 12.dp)) } }, confirmButton = { TextButton(onClick = vm::installUpdate, enabled = !vm.updateBusy) { Text(if (vm.downloaded == null) "Pobierz i zainstaluj" else "Zainstaluj") } }, dismissButton = { TextButton(onClick = { vm.release = null }, enabled = !vm.updateBusy) { Text("Później") } }) }
+    vm.error?.let { message -> AlertDialog(onDismissRequest = { vm.error = null }, title = { Text("Nie udało się wykonać operacji") }, text = { Text(message) }, confirmButton = { TextButton(onClick = { vm.error = null }) { Text("Rozumiem") } }) }
 }
 
 @Composable private fun Sidebar(vm: ExplorerModel, modifier: Modifier, addLocal: () -> Unit, addNetwork: () -> Unit, settings: () -> Unit) {

@@ -2,9 +2,11 @@ package pl.openfilepower
 
 import android.content.Context
 import android.net.Uri
+import android.provider.DocumentsContract
 import android.webkit.MimeTypeMap
 import androidx.documentfile.provider.DocumentFile
 import jcifs.CIFSContext
+import jcifs.SmbConstants
 import jcifs.config.PropertyConfiguration
 import jcifs.context.BaseContext
 import jcifs.smb.NtlmPasswordAuthenticator
@@ -84,19 +86,51 @@ class Files(private val context: Context, private val roots: () -> List<Root>) {
         if (root(item.place).network) smb(item.place, item.directory).use { it.delete() }
         else check(document(item.place).delete()) { "Nie udało się usunąć ${item.name}" }
     }
-    private fun output(parent: Place, name: String, mime: String): OutputStream = if (root(parent).network) smb(parent.child(name)).outputStream else {
+    private fun output(parent: Place, name: String, mime: String): OutputStream = if (root(parent).network) {
+        smb(parent.child(name)).openOutputStream(false, SmbConstants.O_WRONLY or SmbConstants.O_CREAT or SmbConstants.O_EXCL, SmbConstants.FILE_WRITE_DATA, SmbConstants.FILE_NO_SHARE)
+    } else {
         val created = document(parent).createFile(mime, name) ?: error("Nie można utworzyć $name")
-        context.contentResolver.openOutputStream(created.uri, "w") ?: error("Nie można zapisać $name")
+        try {
+            check(created.name == name) { "Dostawca plików zmienił nazwę docelową; operacja została przerwana" }
+            context.contentResolver.openOutputStream(created.uri, "w") ?: error("Nie można zapisać $name")
+        } catch (e: Exception) { runCatching { created.delete() }; throw e }
     }
     fun transfer(clip: Clip, destination: Place, cancelled: () -> Boolean, progress: (String, Long) -> Unit) {
         clip.items.forEach { item ->
-            require(!FileRules.isWithin(item.place, destination)) { "Nie można kopiować folderu do niego samego" }
+            require(!sameOrDescendant(item, destination)) { "Nie można kopiować folderu do niego samego ani jego podfolderu" }
             require(!exists(destination.child(item.name))) { "W folderze docelowym istnieje już ${item.name}. Zmień nazwę lub wybierz inny folder." }
         }
         clip.items.forEach { item ->
             copy(item, destination, cancelled, progress)
             if (clip.move) delete(item)
         }
+    }
+    private fun sameOrDescendant(item: Item, destination: Place): Boolean {
+        if (FileRules.isWithin(item.place, destination)) return true
+        if (!item.directory) return false
+        val fromRoot = root(item.place)
+        val toRoot = root(destination)
+        if (fromRoot.network != toRoot.network) return false
+        if (!fromRoot.network) {
+            val from = document(item.place).uri
+            val to = document(destination).uri
+            if (from.authority != to.authority) return false
+            val fromId = DocumentsContract.getDocumentId(from)
+            val toId = DocumentsContract.getDocumentId(to)
+            if (fromId == toId) return true
+            if (from.authority == "com.android.externalstorage.documents" && toId.startsWith(fromId.trimEnd('/') + "/")) return true
+            return runCatching { DocumentsContract.isChildDocument(context.contentResolver, from, to) }.getOrDefault(false)
+        }
+        val a = java.net.URI(fromRoot.address)
+        val b = java.net.URI(toRoot.address)
+        if (a.port != b.port) return false
+        val sameHost = a.host.equals(b.host, true) || runCatching {
+            java.net.InetAddress.getAllByName(a.host).toSet().intersect(java.net.InetAddress.getAllByName(b.host).toSet()).isNotEmpty()
+        }.getOrDefault(false)
+        if (!sameHost) return false
+        val fromParts = a.path.trim('/').split('/') + item.place.parts
+        val toParts = b.path.trim('/').split('/') + destination.parts
+        return fromParts.size <= toParts.size && fromParts.zip(toParts).all { it.first.equals(it.second, true) }
     }
     private fun copy(item: Item, parent: Place, cancelled: () -> Boolean, progress: (String, Long) -> Unit) {
         if (cancelled()) throw java.util.concurrent.CancellationException("Anulowano transfer")
@@ -120,6 +154,7 @@ class Files(private val context: Context, private val roots: () -> List<Root>) {
                             target.write(buffer, 0, count); total += count
                             progress(item.name, total)
                         }
+                        check(item.size <= 0 || total == item.size) { "Rozmiar źródła zmienił się podczas kopiowania: ${item.name}" }
                     }
                 }
             }

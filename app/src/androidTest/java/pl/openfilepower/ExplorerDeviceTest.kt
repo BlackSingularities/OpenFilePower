@@ -61,6 +61,17 @@ class ExplorerDeviceTest {
         files.transfer(Clip(listOf(folder), false), dest, { false }) { _, _ -> }
         assertEquals(600_000L, files.list(dest.child("source")).single().size)
     }
+    @Test fun overlappingSafRootsCannotCopyIntoThemselves() {
+        val alias = local.copy(id = "alias")
+        val files = Files(context) { listOf(local, alias) }
+        val parent = files.mkdir(Place(local.id), "alias-${UUID.randomUUID()}")
+        val source = files.mkdir(parent, "source")
+        files.mkdir(source, "child")
+        val item = files.list(parent).single()
+        val destination = Place(alias.id, source.parts + "child")
+        assertTrue(runCatching { files.transfer(Clip(listOf(item), false), destination, { false }) { _, _ -> } }.isFailure)
+        assertTrue(files.list(source.child("child")).isEmpty())
+    }
     @Test fun smbRoundTrip() {
         val nas = Root("nas", "Test NAS", "smb://10.0.2.2/fixtures/", "ofptest", "", "fixture-password")
         val files = Files(context) { listOf(local, nas) }
