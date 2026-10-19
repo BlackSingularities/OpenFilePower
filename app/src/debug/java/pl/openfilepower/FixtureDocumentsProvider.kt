@@ -9,7 +9,7 @@ import android.provider.DocumentsContract.Root
 import android.provider.DocumentsProvider
 import java.io.File
 
-/** Test-APK-only document provider. Never packaged in the application. */
+/** Debug-only fixture provider. Never packaged in a release APK. */
 class FixtureDocumentsProvider : DocumentsProvider() {
     private val base get() = File(context!!.cacheDir, "fixtures").apply { mkdirs() }
     private fun file(id: String): File = if (id == "root") base else File(base, id.removePrefix("root/")).also { require(it.canonicalPath.startsWith(base.canonicalPath + File.separator)) }

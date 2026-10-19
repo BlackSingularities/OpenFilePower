@@ -51,6 +51,7 @@ class Files(private val context: Context, private val roots: () -> List<Root>) {
     }
     fun document(place: Place): DocumentFile {
         var doc = DocumentFile.fromTreeUri(context, Uri.parse(root(place).address)) ?: error("Nieprawidłowy dostęp do folderu")
+        check(doc.exists() && doc.canRead()) { "Brak dostępu do źródła. Podłącz urządzenie lub wybierz folder ponownie." }
         place.parts.forEach { doc = doc.findFile(it) ?: error("Nie znaleziono: $it") }
         return doc
     }
@@ -62,7 +63,7 @@ class Files(private val context: Context, private val roots: () -> List<Root>) {
         } } }
     } else document(place).listFiles().map { Item(place.child(it.name ?: "?"), it.name ?: "?", it.isDirectory, it.length(), it.lastModified(), it.type ?: FileRules.mime(it.name ?: ""), it.uri) }
     fun input(item: Item): InputStream = if (root(item.place).network) smb(item.place).inputStream else context.contentResolver.openInputStream(document(item.place).uri) ?: error("Nie można odczytać pliku")
-    private fun exists(place: Place): Boolean = if (root(place).network) smb(place).use { it.exists() } else document(place.parent() ?: place).findFile(place.parts.last()) != null
+    private fun exists(place: Place): Boolean = if (root(place).network) smb(place).use { it.exists() } else if (place.parts.isEmpty()) document(place).exists() else document(place.parent()!!).findFile(place.parts.last()) != null
     fun mkdir(parent: Place, name: String): Place {
         FileRules.validateName(name)
         val dest = parent.child(name)

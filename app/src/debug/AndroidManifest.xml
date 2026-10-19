@@ -1,0 +1,5 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <provider android:name="pl.openfilepower.FixtureDocumentsProvider" android:authorities="pl.openfilepower.test.documents" android:exported="true" android:grantUriPermissions="true" android:permission="android.permission.MANAGE_DOCUMENTS" />
+    </application>
+</manifest>
