@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.provider.Settings
 import androidx.core.content.FileProvider
+import androidx.core.content.pm.PackageInfoCompat
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
@@ -49,7 +50,7 @@ class Updates(private val context: Context) {
             @Suppress("DEPRECATION")
             val current = context.packageManager.getPackageInfo(context.packageName, PackageManager.GET_SIGNATURES)
             @Suppress("DEPRECATION")
-            check(archive.packageName == context.packageName && archive.signatures?.toSet() == current.signatures?.toSet() && archive.longVersionCode > current.longVersionCode) { "Niezgodny podpis, pakiet lub numer wersji" }
+            check(archive.packageName == context.packageName && !archive.signatures.isNullOrEmpty() && archive.signatures?.toSet() == current.signatures?.toSet() && PackageInfoCompat.getLongVersionCode(archive) > PackageInfoCompat.getLongVersionCode(current)) { "Niezgodny podpis, pakiet lub numer wersji" }
             val apk = File(folder, "OpenFilePower.apk")
             check(!apk.exists() || apk.delete())
             check(part.renameTo(apk))
