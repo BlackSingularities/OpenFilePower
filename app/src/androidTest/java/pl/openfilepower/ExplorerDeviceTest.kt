@@ -161,13 +161,13 @@ class ExplorerDeviceTest {
         device.waitForIdle()
         device.findObject(By.desc("Właściwości Plan podróży.txt"))?.click()
         device.waitForIdle()
-        val out = File(context.getExternalFilesDir(null), "screenshots").apply { mkdirs() }
-        device.takeScreenshot(File(out, "tablet.png"))
+        device.executeShellCommand("mkdir -p /sdcard/Download/openfilepower-screenshots")
+        device.executeShellCommand("screencap -p /sdcard/Download/openfilepower-screenshots/tablet.png")
         device.executeShellCommand("wm size 412x915")
         device.executeShellCommand("wm density 160")
         device.waitForIdle()
         assertTrue(device.wait(Until.hasObject(By.text("Plan podróży.txt")), 15000))
-        device.takeScreenshot(File(out, "phone.png"))
+        device.executeShellCommand("screencap -p /sdcard/Download/openfilepower-screenshots/phone.png")
         device.executeShellCommand("wm size reset")
         device.executeShellCommand("wm density reset")
     }
