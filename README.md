@@ -2,6 +2,16 @@
 
 Natywny menedżer plików dla Androida — wiele folderów, jedna przestrzeń. Kotlin, Jetpack Compose i Material 3, bez reklam i telemetrii.
 
+[![Android](https://github.com/BlackSingularities/OpenFilePower/actions/workflows/android.yml/badge.svg)](https://github.com/BlackSingularities/OpenFilePower/actions/workflows/android.yml)
+
+![OpenFilePower na tablecie](docs/screenshots/tablet.png)
+
+<details><summary>Widok na telefonie</summary>
+
+<img src="docs/screenshots/phone.png" alt="OpenFilePower na telefonie" width="320" />
+
+</details>
+
 ## Instalacja
 
 Pobierz `OpenFilePower.apk` z [najnowszego wydania](https://github.com/BlackSingularities/OpenFilePower/releases/latest), otwórz APK i zaakceptuj instalację w Androidzie. Wymagany Android 8.0 lub nowszy.
@@ -57,7 +67,7 @@ Wymagane sekrety Actions: `SIGNING_KEY` (keystore Base64), `SIGNING_STORE_PASSWO
 
 ## Weryfikacja urządzeniowa
 
-Zobacz [scenariusze QA](docs/QA.md). Build i testy JVM nie zastępują sprawdzenia realnych dostawców SAF, urządzeń NAS i gestów na tablecie.
+W CI wykonano 3 testy JVM oraz 7 testów na emulatorze Androida 15, z rzeczywistym serwerem Samba: zgodność bajtowa transferów SAF/SMB, polskie znaki w nazwach, konflikt nazw, przenoszenie, anulowanie, ochrona przed kopiowaniem do siebie, gest przeciągania, odczyt EXIF i układy telefonu/tabletu. Zobacz [wynik przebiegu](https://github.com/BlackSingularities/OpenFilePower/actions/runs/39195867514) i [scenariusze dodatkowej weryfikacji](docs/QA.md). Testy emulatora nie zastępują sprawdzenia konkretnego telefonu i modelu NAS.
 
 ## Licencja
 

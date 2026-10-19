@@ -9,6 +9,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.BackHandler
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.SystemBarStyle
 import androidx.compose.foundation.*
 import androidx.compose.foundation.draganddrop.dragAndDropSource
 import androidx.compose.foundation.draganddrop.dragAndDropTarget
@@ -49,7 +50,8 @@ private val Lavender = Color(0xFFC3B8F4)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState); enableEdgeToEdge()
+        super.onCreate(savedInstanceState)
+        enableEdgeToEdge(statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT), navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT))
         setContent {
             MaterialTheme(colorScheme = darkColorScheme(primary = Mint, onPrimary = Ink, secondary = Lavender, background = Ink, surface = Panel, surfaceVariant = Color(0xFF242D3E), onSurface = Color(0xFFECF0F7), onSurfaceVariant = Muted)) {
                 Surface(Modifier.fillMaxSize(), color = Ink) { Explorer() }
