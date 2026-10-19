@@ -8,6 +8,12 @@ import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
 import androidx.test.uiautomator.UiDevice
 import androidx.test.uiautomator.Until
+import androidx.test.core.app.ActivityScenario
+import androidx.lifecycle.ViewModelProvider
+import android.graphics.Bitmap
+import android.graphics.Point
+import androidx.exifinterface.media.ExifInterface
+import org.junit.Before
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -19,6 +25,12 @@ class ExplorerDeviceTest {
     private val context get() = InstrumentationRegistry.getInstrumentation().targetContext
     private val uri = DocumentsContract.buildTreeDocumentUri("pl.openfilepower.test.documents", "root")
     private val local = Root("qa", "Moje pliki", uri.toString())
+    @Before fun disableUpdateChecks() { Preferences(context).autoUpdate = false }
+    private fun awaitCondition(condition: () -> Boolean) {
+        val until = android.os.SystemClock.elapsedRealtime() + 15000
+        while (!condition() && android.os.SystemClock.elapsedRealtime() < until) android.os.SystemClock.sleep(100)
+        assertTrue("Condition did not become true", condition())
+    }
     private fun workspace(): Pair<Files, Place> {
         val files = Files(context) { listOf(local) }
         return files to files.mkdir(Place(local.id), "test-${UUID.randomUUID()}")
@@ -87,6 +99,49 @@ class ExplorerDeviceTest {
         files.transfer(Clip(listOf(remote), true), back, { false }) { _, _ -> }
         assertArrayEquals(bytes, files.input(files.list(back).single()).use { it.readBytes() })
         assertTrue(files.list(target).isEmpty())
+    }
+    @Test fun inspectorReadsPhotoExif() {
+        val (files, base) = workspace()
+        val doc = files.document(base).createFile("image/jpeg", "sample.jpg")!!
+        val bitmap = Bitmap.createBitmap(320, 240, Bitmap.Config.ARGB_8888).apply { eraseColor(android.graphics.Color.rgb(80, 160, 140)) }
+        context.contentResolver.openOutputStream(doc.uri)!!.use { bitmap.compress(Bitmap.CompressFormat.JPEG, 95, it) }
+        bitmap.recycle()
+        context.contentResolver.openFileDescriptor(doc.uri, "rw")!!.use {
+            ExifInterface(it.fileDescriptor).apply {
+                setAttribute(ExifInterface.TAG_MODEL, "QA Camera")
+                setAttribute(ExifInterface.TAG_PHOTOGRAPHIC_SENSITIVITY, "400")
+                saveAttributes()
+            }
+        }
+        Preferences(context).apply { saveRoots(listOf(local)); savePlaces("tabs", listOf(base)) }
+        val item = files.list(base).single()
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            lateinit var model: ExplorerModel
+            scenario.onActivity { model = ViewModelProvider(it)[ExplorerModel::class.java] }
+            awaitCondition { !model.loading }
+            scenario.onActivity { model.inspect(item) }
+            awaitCondition { model.details?.values?.any { it.first == "Aparat" } == true }
+            assertTrue(model.details!!.values.contains("Aparat" to "QA Camera"))
+            assertTrue(model.details!!.values.contains("ISO" to "400"))
+            assertNotNull(model.details!!.preview)
+        }
+    }
+    @Test fun dragAndDropCopiesAFile() {
+        val (files, base) = workspace()
+        val target = files.mkdir(base, "Upuść tutaj")
+        val bytes = "Przeciąganie działa".toByteArray()
+        write(files, base, "drag.txt", bytes)
+        Preferences(context).apply { saveRoots(listOf(local)); savePlaces("tabs", listOf(base)); savePlaces("favorites", emptyList()) }
+        val device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
+        ActivityScenario.launch(MainActivity::class.java).use {
+            assertTrue(device.wait(Until.hasObject(By.text("drag.txt")), 15000))
+            val source = device.findObject(By.desc("Przytrzymaj, aby przeciągnąć drag.txt"))
+            val bounds = device.findObject(By.text("Upuść tutaj")).visibleBounds
+            source.drag(Point(bounds.centerX(), bounds.centerY()), 500)
+            awaitCondition { files.list(target).isNotEmpty() }
+            assertArrayEquals(bytes, files.input(files.list(target).single()).use { stream -> stream.readBytes() })
+            assertTrue(files.list(base).any { file -> file.name == "drag.txt" })
+        }
     }
     @Test fun tabletAndPhoneScreenshots() {
         val device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
