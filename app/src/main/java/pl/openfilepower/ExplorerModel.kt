@@ -348,6 +348,7 @@ class ExplorerModel(app: Application) : AndroidViewModel(app) {
 
     // ——— Zaznaczanie i schowek ———
     fun select(item: Item) { selected = if (item.place in selected) selected - item.place else selected + item.place }
+    fun setSelection(places: Set<Place>) { selected = places }
     fun selectAll() { selected = if (selected.size == visible.size) emptySet() else visible.map { it.place }.toSet() }
     fun invertSelection() { selected = visible.map { it.place }.toSet() - selected }
     fun clearSelection() { selected = emptySet() }

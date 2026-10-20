@@ -4,6 +4,7 @@ import android.content.ClipData
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.draganddrop.dragAndDropSource
 import androidx.compose.foundation.draganddrop.dragAndDropTarget
@@ -95,7 +96,7 @@ fun describe(item: Item): String = if (item.directory) (if (item.children >= 0) 
     Row(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(if (selected) Color.White.copy(alpha = 0.12f) else Color.Transparent)
             .then(if (item.directory) Modifier.dropFolder(vm, item.place) else Modifier)
-            .combinedClickable(onClick = { if (vm.selecting) vm.select(item) else vm.open(item) }, onLongClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); vm.select(item) })
+            .clickable { if (vm.selecting) vm.select(item) else vm.open(item) }
             .padding(horizontal = 8.dp, vertical = if (vm.compact) 3.dp else 7.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -117,7 +118,7 @@ fun describe(item: Item): String = if (item.directory) (if (item.children >= 0) 
     Column(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(if (selected) Color.White.copy(alpha = 0.14f) else Palette.Card)
             .then(if (item.directory) Modifier.dropFolder(vm, item.place) else Modifier)
-            .combinedClickable(onClick = { if (vm.selecting) vm.select(item) else vm.open(item) }, onLongClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); vm.select(item) })
+            .clickable { if (vm.selecting) vm.select(item) else vm.open(item) }
             .padding(8.dp),
     ) {
         BoxWithConstraints(Modifier.fillMaxWidth()) {

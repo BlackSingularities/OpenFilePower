@@ -63,8 +63,11 @@ import pl.openfilepower.*
     LaunchedEffect(vm.notice) { vm.notice?.let { snacks.showSnackbar(it); vm.notice = null } }
 
     val overlay = vm.viewer != null || vm.editor != null
-    BackHandler(enabled = !overlay && (settings || phoneDetails || drawer || vm.view != View.Home || vm.selecting)) {
+    BackHandler(enabled = !overlay && (network || vm.syncDraft != null || vm.analysis != null || settings || phoneDetails || drawer || vm.view != View.Home || vm.selecting)) {
         when {
+            network -> network = false
+            vm.syncDraft != null -> vm.syncDraft = null
+            vm.analysis != null -> vm.closeAnalysis()
             settings -> settings = false
             phoneDetails -> phoneDetails = false
             drawer -> drawer = false

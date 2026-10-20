@@ -7,6 +7,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -62,25 +63,25 @@ import java.util.Locale
                         Text("${items.count { FileRules.isImage(it) }} zdjęć · ${items.count { FileRules.isVideo(it) }} filmów · ${formatSize(items.sumOf { it.size })}", fontSize = 11.sp, color = Palette.TextDim, maxLines = 1)
                     }
                     vm.galleryAlbum?.let { album -> RoundIcon(Icons.Rounded.FolderOpen, "Otwórz folder albumu", size = 40.dp) { vm.navigate(album, vm.tabs.isNotEmpty()) } }
-                    RoundIcon(if (vm.galleryByMonth) Icons.Rounded.CalendarViewMonth else Icons.Rounded.CalendarViewDay, if (vm.galleryByMonth) "Grupuj po dniach" else "Grupuj po miesiącach", size = 40.dp) { vm.updateGalleryByMonth(!vm.galleryByMonth) }
+                    if (vm.galleryAlbum == null) {
+                        // Oś czasu: ponowne dotknięcie przełącza grupowanie dni ↔ miesiące.
+                        RoundIcon(if (vm.galleryByMonth) Icons.Rounded.CalendarViewMonth else Icons.Rounded.CalendarMonth, if (vm.galleryAlbums) "Oś czasu" else if (vm.galleryByMonth) "Oś czasu – grupuj po dniach" else "Oś czasu – grupuj po miesiącach", active = !vm.galleryAlbums, size = 40.dp) {
+                            if (vm.galleryAlbums) vm.galleryAlbums = false else vm.updateGalleryByMonth(!vm.galleryByMonth)
+                        }
+                        RoundIcon(Icons.Rounded.PhotoAlbum, "Albumy", active = vm.galleryAlbums, size = 40.dp) { vm.galleryAlbums = true }
+                    }
                     RoundIcon(Icons.Rounded.PhotoSizeSelectLarge, "Rozmiar miniatur: ${vm.gridSize.label}", size = 40.dp) { vm.updateGridSize(GridSize.entries[(vm.gridSize.ordinal + 1) % GridSize.entries.size]) }
-                    RoundIcon(Icons.Rounded.Refresh, "Odśwież", size = 40.dp) { vm.refresh() }
                 }
             }
-            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                if (vm.galleryAlbum == null) {
-                    Chip("Oś czasu", !vm.galleryAlbums, icon = Icons.Rounded.CalendarMonth) { vm.galleryAlbums = false }
-                    Chip("Albumy", vm.galleryAlbums, icon = Icons.Rounded.PhotoAlbum) { vm.galleryAlbums = true }
-                    Box(Modifier.padding(horizontal = 2.dp).width(1.dp).height(20.dp).background(Palette.Line))
-                }
-                if (vm.showFilters || vm.galleryFilter != MediaFilter.ALL) MediaFilter.entries.forEach { f -> Chip(f.label, vm.galleryFilter == f) { vm.galleryFilter = f } }
+            if (vm.showFilters || vm.galleryFilter != MediaFilter.ALL) Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                MediaFilter.entries.forEach { f -> Chip(f.label, vm.galleryFilter == f) { vm.galleryFilter = f } }
             }
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 when {
                     !vm.access -> Empty(Icons.Rounded.PhotoLibrary, "Galeria potrzebuje dostępu", "Nadaj pełny dostęp do plików na ekranie startowym.", Modifier.align(Alignment.Center))
                     vm.loading && vm.entries.isEmpty() -> CircularProgressIndicator(Modifier.align(Alignment.Center), color = Palette.White)
                     vm.galleryAlbums && vm.galleryAlbum == null -> Albums(vm, medium)
-                    vm.visible.isEmpty() -> Empty(Icons.Rounded.PhotoLibrary, "Brak zdjęć i filmów", "Zmień filtr albo odśwież galerię.", Modifier.align(Alignment.Center))
+                    vm.visible.isEmpty() -> Empty(Icons.Rounded.PhotoLibrary, "Brak zdjęć i filmów", "Zmień filtr albo zrób zdjęcie – galeria odświeża się przy każdym otwarciu.", Modifier.align(Alignment.Center))
                     else -> Timeline(vm, medium)
                 }
             }
@@ -135,7 +136,9 @@ private fun dayLabel(time: Long): String {
             } while (event.changes.any { it.pressed })
         }
     }
-    LazyVerticalGrid(GridCells.Adaptive(cell.dp), modifier = zoom, horizontalArrangement = Arrangement.spacedBy(3.dp), verticalArrangement = Arrangement.spacedBy(3.dp), contentPadding = PaddingValues(bottom = 120.dp)) {
+    val grid = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
+    val ordered = remember(groups) { groups.values.flatten() }
+    LazyVerticalGrid(GridCells.Adaptive(cell.dp), state = grid, modifier = zoom.dragSelect(vm, grid, { ordered }), horizontalArrangement = Arrangement.spacedBy(3.dp), verticalArrangement = Arrangement.spacedBy(3.dp), contentPadding = PaddingValues(bottom = 120.dp)) {
         groups.forEach { (label, dayItems) ->
             item(span = { GridItemSpan(maxLineSpan) }, key = "h:$label") {
                 Row(Modifier.padding(start = 4.dp, top = 14.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -159,7 +162,7 @@ private fun dayLabel(time: Long): String {
     val haptic = LocalHapticFeedback.current
     Box(
         Modifier.aspectRatio(1f).clip(RoundedCornerShape(corner)).background(Palette.PanelHigh)
-            .combinedClickable(onClick = { if (vm.selecting) vm.select(item) else vm.open(item) }, onLongClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); vm.select(item) }),
+            .clickable { if (vm.selecting) vm.select(item) else vm.open(item) },
     ) {
         Icon(iconFor(item), null, Modifier.align(Alignment.Center).size(28.dp), tint = Palette.TextFaint)
         AsyncImage(item.imageModel(), item.name, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)

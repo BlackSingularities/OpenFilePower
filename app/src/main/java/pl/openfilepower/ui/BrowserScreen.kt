@@ -78,6 +78,8 @@ class BrowserActions(
             if (searchOpen && !vm.selecting) SearchField(vm, category == null)
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 val items = vm.visible
+                val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+                val gridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
                 val showPath = category != null || vm.searchResults != null
                 when {
                     vm.loading && items.isEmpty() -> CircularProgressIndicator(Modifier.align(Alignment.Center), color = Palette.White)
@@ -88,10 +90,10 @@ class BrowserActions(
                         when { vm.searchResults != null || vm.query.isNotEmpty() -> "Spróbuj innej nazwy lub użyj * jako dowolnego ciągu."; category != null -> "Pliki pojawią się, gdy system je zindeksuje."; else -> "Utwórz folder przyciskiem + lub wklej pliki ze schowka." },
                         Modifier.align(Alignment.Center),
                     )
-                    vm.grid -> LazyVerticalGrid(columns = GridCells.Adaptive((if (medium) vm.gridSize.tablet else vm.gridSize.phone).dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(bottom = 160.dp)) {
+                    vm.grid -> LazyVerticalGrid(state = gridState, modifier = Modifier.dragSelect(vm, gridState, { items }), columns = GridCells.Adaptive((if (medium) vm.gridSize.tablet else vm.gridSize.phone).dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(bottom = 160.dp)) {
                         items(items, key = { it.place.toString() }) { FileTile(it, vm, actions.inspect) }
                     }
-                    else -> LazyColumn(contentPadding = PaddingValues(bottom = 160.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    else -> LazyColumn(state = listState, modifier = Modifier.dragSelect(vm, listState, { items }), contentPadding = PaddingValues(bottom = 160.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         items(items, key = { it.place.toString() }) { FileRow(it, vm, wide, showPath, actions.inspect) }
                     }
                 }

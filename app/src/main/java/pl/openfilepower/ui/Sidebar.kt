@@ -69,8 +69,15 @@ import pl.openfilepower.*
             NavRow(Icons.Rounded.Dns, "Połącz z NAS (SMB)", false) { addNetwork(); done() }
 
             if (vm.access && vm.navCategories.isNotEmpty()) {
-                SectionTitle("Kategorie")
-                vm.navCategories.forEach { c -> NavRow(iconFor(c), c.label, vm.view == View.Category(c)) { vm.openCategory(c); done() } }
+                SectionTitle("Kategorie") {
+                    if (vm.hiddenCategories.isNotEmpty()) Text("Pokaż ukryte (${vm.hiddenCategories.size})", fontSize = 11.sp, color = Palette.TextDim, modifier = Modifier.clip(Pill).clickable { vm.showAllCategories(true) }.padding(horizontal = 8.dp, vertical = 3.dp))
+                }
+                vm.navCategories.forEach { c ->
+                    NavRow(iconFor(c), c.label, vm.view == View.Category(c), menu = listOf(
+                        "Ukryj „${c.label}” z paska" to { vm.showCategory(c, false) },
+                        "Ukryj wszystkie kategorie" to { vm.showAllCategories(false) },
+                    )) { vm.openCategory(c); done() }
+                }
             }
             Spacer(Modifier.height(12.dp))
         }
