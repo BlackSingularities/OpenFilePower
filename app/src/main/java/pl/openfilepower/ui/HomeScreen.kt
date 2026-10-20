@@ -41,8 +41,6 @@ class HomeActions(val grantAccess: () -> Unit, val addFolder: () -> Unit, val ad
             Row(Modifier.padding(horizontal = side), verticalAlignment = Alignment.CenterVertically) {
                 if (!medium) { RoundIcon(Icons.Rounded.Menu, "Źródła i foldery", size = 40.dp, onClick = actions.menu); Spacer(Modifier.width(6.dp)) }
                 Text("OpenFilePower", fontSize = if (medium) 22.sp else 19.sp, fontWeight = FontWeight.Black, maxLines = 1, modifier = Modifier.weight(1f))
-                RoundIcon(Icons.Rounded.Dns, "Połącz z NAS", size = 40.dp, onClick = actions.addNetwork)
-                Spacer(Modifier.width(6.dp))
                 RoundIcon(Icons.Rounded.PhotoLibrary, "Galeria", size = 40.dp) { vm.openGallery() }
                 Spacer(Modifier.width(6.dp))
                 RoundIcon(Icons.Rounded.Settings, "Ustawienia", size = 40.dp, badge = if (vm.release != null) "1" else null, onClick = actions.settings)
