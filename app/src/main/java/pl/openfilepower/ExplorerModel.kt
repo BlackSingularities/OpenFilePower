@@ -34,6 +34,7 @@ sealed interface View {
     data class Category(val category: pl.openfilepower.Category) : View
     data object Trash : View
     data object Gallery : View
+    data object Sync : View
 }
 
 class ExplorerModel(app: Application) : AndroidViewModel(app) {
@@ -44,6 +45,7 @@ class ExplorerModel(app: Application) : AndroidViewModel(app) {
     private val updater = Updates(app)
     private val media = MediaIndex(app)
     val trash = Trash()
+    val sync = SyncController(app, viewModelScope, { notice = it }, { error = it })
 
     var view by mutableStateOf<View>(View.Home); private set
     var tabs by mutableStateOf(prefs.places("tabs").filter { p -> roots.any { it.id == p.root } }.map { FolderTab(place = it) }); private set
@@ -81,6 +83,11 @@ class ExplorerModel(app: Application) : AndroidViewModel(app) {
     var compact by mutableStateOf(prefs.flag("compact", false)); private set
     var gridSize by mutableStateOf(runCatching { GridSize.valueOf(prefs.text("gridSize", GridSize.MEDIUM.name)) }.getOrDefault(GridSize.MEDIUM)); private set
     var typeFilter by mutableStateOf(TypeFilter.ALL)
+    /** Kategorie ukryte w pasku nawigacji (nazwy enum). */
+    var hiddenCategories by mutableStateOf(prefs.text("hiddenCategories", "").split(',').filter { it.isNotEmpty() }.toSet()); private set
+    val navCategories get() = Category.entries.filter { it.name !in hiddenCategories }
+    fun showCategory(c: Category, show: Boolean) { hiddenCategories = if (show) hiddenCategories - c.name else hiddenCategories + c.name; prefs.setText("hiddenCategories", hiddenCategories.joinToString(",")) }
+    fun showAllCategories(show: Boolean) { hiddenCategories = if (show) emptySet() else Category.entries.map { it.name }.toSet(); prefs.setText("hiddenCategories", hiddenCategories.joinToString(",")) }
     var recentPlaces by mutableStateOf(prefs.places("recentPlaces").distinct()); private set
 
     // Wykrywanie NAS.
@@ -166,6 +173,7 @@ class ExplorerModel(app: Application) : AndroidViewModel(app) {
         // Właśnie nadano pełny dostęp: od razu otwórz katalog główny pamięci wewnętrznej.
         if (!before && access && tabs.none { it.place.root == StorageAccess.INTERNAL_ID }) { navigate(Place(StorageAccess.INTERNAL_ID), tabs.isNotEmpty()); return }
         if (before != access || view == View.Home) refresh()
+        sync.syncAuto("po otwarciu aplikacji", true)
     }
     /** Standardowe foldery pamięci wewnętrznej (DCIM, Pobrane, Dokumenty…), które istnieją na urządzeniu. */
     val mainFolders: List<Pair<String, Place>> get() {
@@ -252,6 +260,10 @@ class ExplorerModel(app: Application) : AndroidViewModel(app) {
     }
     fun goHome() { view = View.Home; resetListing(); refresh() }
     fun openCategory(category: Category) { view = View.Category(category); resetListing(); refresh() }
+    /** Folder, dla którego otwarto tworzenie nowej pary synchronizacji. */
+    var syncDraft by mutableStateOf<Place?>(null)
+    fun viewModelRun(block: suspend () -> Unit) = operation("Proszę czekać", block)
+    fun openSync() { view = View.Sync; resetListing(); sync.markSeen(); refresh() }
     fun openTrash() { view = View.Trash; resetListing(); refresh() }
     fun openGallery(album: Place? = null) { galleryAlbum = album; galleryAlbums = false; view = View.Gallery; resetListing(); refresh() }
     fun showAlbum(album: Place?) { galleryAlbum = album; galleryAlbums = false; selected = emptySet() }
@@ -282,6 +294,7 @@ class ExplorerModel(app: Application) : AndroidViewModel(app) {
                     View.Browse -> { val current = place ?: return@launch; entries = withContext(Dispatchers.IO) { files.list(current) } }
                     is View.Category -> entries = withContext(Dispatchers.IO) { media.files(v.category, roots) }
                     View.Gallery -> entries = withContext(Dispatchers.IO) { media.gallery(roots) }
+                    View.Sync -> sync.reload()
                     View.Trash -> trashEntries = withContext(Dispatchers.IO) { trash.entries().sortedByDescending { it.deleted } }
                 }
             }

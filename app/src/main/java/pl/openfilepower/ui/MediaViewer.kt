@@ -28,6 +28,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.*
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -151,17 +152,22 @@ private fun analyze(bitmap: Bitmap): Analysis {
                         Text(current.name, fontWeight = FontWeight.Bold, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text("${pager.currentPage + 1} z ${media.size} · ${formatSize(current.size)} · ${formatShortDate(current.modified)}", fontSize = 11.sp, color = Palette.TextDim, maxLines = 1)
                     }
-                    RoundIcon(Icons.Rounded.Info, "Właściwości") { inspect(current) }
-                }
-                Row(Modifier.padding(top = 8.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    if (FileRules.isImage(current)) {
-                        Chip("EXIF", showExif, icon = Icons.Rounded.CameraAlt) { showExif = !showExif; vm.prefs.setFlag("viewerExif", showExif) }
-                        Chip("Histogram", showHistogram, icon = Icons.Rounded.BarChart) { showHistogram = !showHistogram; vm.prefs.setFlag("viewerHistogram", showHistogram) }
-                        Chip("Przepalenia", showClipping, icon = Icons.Rounded.Exposure) { showClipping = !showClipping }
+                    var menu by remember { mutableStateOf(false) }
+                    Box {
+                        RoundIcon(Icons.Rounded.MoreVert, "Więcej opcji") { menu = true }
+                        DarkMenu(menu, { menu = false }) {
+                            if (FileRules.isImage(current)) {
+                                MenuRow(if (showExif) Icons.Rounded.CheckCircle else Icons.Rounded.CameraAlt, "Parametry zdjęcia (EXIF)") { showExif = !showExif; vm.prefs.setFlag("viewerExif", showExif) }
+                                MenuRow(if (showHistogram) Icons.Rounded.CheckCircle else Icons.Rounded.BarChart, "Histogram") { showHistogram = !showHistogram; vm.prefs.setFlag("viewerHistogram", showHistogram) }
+                                MenuRow(if (showClipping) Icons.Rounded.CheckCircle else Icons.Rounded.Exposure, "Przepalenia i cienie") { showClipping = !showClipping }
+                                HorizontalDivider(color = Palette.Line)
+                            }
+                            MenuRow(if (slideshow) Icons.Rounded.Pause else Icons.Rounded.Slideshow, if (slideshow) "Zatrzymaj pokaz slajdów" else "Pokaz slajdów") { menu = false; slideshow = !slideshow }
+                            MenuRow(Icons.Rounded.Share, "Udostępnij") { menu = false; vm.share(listOf(current)) }
+                            MenuRow(Icons.AutoMirrored.Rounded.OpenInNew, "Otwórz w innej aplikacji") { menu = false; vm.openExternal(current, true) }
+                            MenuRow(Icons.Rounded.Info, "Właściwości") { menu = false; inspect(current) }
+                        }
                     }
-                    Chip(if (slideshow) "Zatrzymaj" else "Pokaz slajdów", slideshow, icon = if (slideshow) Icons.Rounded.Pause else Icons.Rounded.Slideshow) { slideshow = !slideshow }
-                    Chip("Udostępnij", false, icon = Icons.Rounded.Share) { vm.share(listOf(current)) }
-                    Chip("Otwórz w…", false, icon = Icons.AutoMirrored.Rounded.OpenInNew) { vm.openExternal(current, true) }
                 }
             }
         }
@@ -191,13 +197,44 @@ private fun analyze(bitmap: Bitmap): Analysis {
     }
 }
 
-/** Plakietki ekspozycji jak w Fotopodglądzie: aparat, obiektyw, przysłona, czas, ISO, ogniskowa. */
+/** Karta parametrów zdjęcia: aparat i obiektyw, a pod nimi ekspozycja w kafelkach z ikonami. */
 @Composable private fun ExifStrip(e: PhotoExif, item: Item) {
-    Column(Modifier.fillMaxWidth().background(Color.Black.copy(alpha = 0.55f)).padding(horizontal = 14.dp, vertical = 8.dp)) {
-        Text(listOfNotNull(e.camera, e.lens).joinToString(" · ").ifBlank { item.extension.uppercase() }, fontSize = 12.sp, color = Palette.TextDim, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Row(Modifier.padding(top = 5.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            (e.badges + listOfNotNull(e.megapixels, e.program, if (FileRules.isRaw(item)) "RAW" else null)).forEach { badge ->
-                Text(badge, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.clip(Pill).background(Color.White.copy(alpha = 0.14f)).padding(horizontal = 10.dp, vertical = 4.dp))
+    Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp).clip(RoundedCornerShape(18.dp)).background(Color.Black.copy(alpha = 0.72f)).padding(horizontal = 14.dp, vertical = 10.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Rounded.PhotoCamera, null, Modifier.size(16.dp), tint = Palette.TextDim)
+            Spacer(Modifier.width(8.dp))
+            Text(e.camera ?: item.extension.uppercase(), fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+            if (FileRules.isRaw(item)) Text("RAW", fontSize = 9.sp, fontWeight = FontWeight.Black, color = Palette.Ink, modifier = Modifier.padding(start = 8.dp).clip(Pill).background(Palette.White).padding(horizontal = 6.dp, vertical = 1.dp))
+            e.megapixels?.let { Text("  $it", fontSize = 11.sp, color = Palette.TextDim) }
+        }
+        e.lens?.let { Text(it, fontSize = 11.sp, color = Palette.TextDim, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 24.dp)) }
+        val tiles = listOfNotNull(
+            e.aperture?.let { Triple(Icons.Rounded.Camera, it, "Przysłona") },
+            e.shutter?.let { Triple(Icons.Rounded.ShutterSpeed, it, "Czas") },
+            e.iso?.let { Triple(Icons.Rounded.Iso, it, "ISO") },
+            e.focal?.let { Triple(Icons.Rounded.CenterFocusStrong, it, "Ogniskowa") },
+            e.bias?.let { Triple(Icons.Rounded.Exposure, it, "Korekta") },
+            e.program?.let { Triple(Icons.Rounded.Tune, it, "Program") },
+            e.flash?.let { Triple(if (it == "Błysk") Icons.Rounded.FlashOn else Icons.Rounded.FlashOff, it, "Lampa") },
+        )
+        if (tiles.isNotEmpty()) Row(Modifier.padding(top = 8.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            tiles.forEach { (icon, value, label) ->
+                Column(Modifier.clip(RoundedCornerShape(12.dp)).background(Color.White.copy(alpha = 0.1f)).padding(horizontal = 10.dp, vertical = 6.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(icon, null, Modifier.size(14.dp), tint = Color.White)
+                        Spacer(Modifier.width(5.dp))
+                        Text(value, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                    }
+                    Text(label.uppercase(), fontSize = 8.sp, letterSpacing = 0.8.sp, color = Palette.TextDim, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+        e.taken?.let {
+            Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Rounded.Schedule, null, Modifier.size(13.dp), tint = Palette.TextFaint)
+                Spacer(Modifier.width(6.dp))
+                Text(it, fontSize = 11.sp, color = Palette.TextDim)
+                if (e.gps != null) { Spacer(Modifier.width(12.dp)); Icon(Icons.Rounded.Place, null, Modifier.size(13.dp), tint = Palette.TextFaint); Text(" GPS", fontSize = 11.sp, color = Palette.TextDim) }
             }
         }
     }

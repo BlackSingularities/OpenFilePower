@@ -30,15 +30,17 @@ class MainActivity : ComponentActivity() {
     }
     /** Skrót folderu z ekranu głównego: model odbiera go przez [ShortcutBus]. */
     private fun handle(intent: android.content.Intent?) {
+        if (intent?.action == ACTION_OPEN_SYNC) { ShortcutBus.sync.value = true; return }
         if (intent?.action != ACTION_OPEN_FOLDER) return
         val root = intent.getStringExtra(EXTRA_ROOT) ?: return
         ShortcutBus.place.value = Place(root, intent.getStringArrayExtra(EXTRA_PARTS)?.toList() ?: emptyList())
     }
     companion object {
         const val ACTION_OPEN_FOLDER = "pl.openfilepower.OPEN_FOLDER"
+        const val ACTION_OPEN_SYNC = "pl.openfilepower.OPEN_SYNC"
         const val EXTRA_ROOT = "root"
         const val EXTRA_PARTS = "parts"
     }
 }
 
-object ShortcutBus { val place = kotlinx.coroutines.flow.MutableStateFlow<Place?>(null) }
+object ShortcutBus { val place = kotlinx.coroutines.flow.MutableStateFlow<Place?>(null); val sync = kotlinx.coroutines.flow.MutableStateFlow(false) }

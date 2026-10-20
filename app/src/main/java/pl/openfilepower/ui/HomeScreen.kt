@@ -51,6 +51,7 @@ class HomeActions(val grantAccess: () -> Unit, val addFolder: () -> Unit, val ad
             }
         }
         item { Box(Modifier.padding(horizontal = side)) { UpdateBanner(vm) } }
+        item { Box(Modifier.padding(horizontal = side)) { SyncBanner(vm) } }
         if (!vm.access) item { Box(Modifier.padding(horizontal = side)) { AccessCard(actions.grantAccess, actions.addFolder) } }
 
         if (vm.spaces.isNotEmpty()) item {
@@ -82,6 +83,7 @@ class HomeActions(val grantAccess: () -> Unit, val addFolder: () -> Unit, val ad
                 item { QuickAction(Icons.Rounded.PhotoLibrary, "Galeria") { vm.openGallery() } }
                 item { QuickAction(Icons.Rounded.Camera, "RAW") { vm.galleryFilter = MediaFilter.RAW; vm.openGallery() } }
                 item { QuickAction(Icons.Rounded.Dns, "NAS", onClick = actions.addNetwork) }
+                item { QuickAction(Icons.Rounded.SyncAlt, "Synchronizacja") { vm.openSync() } }
                 item { QuickAction(Icons.Rounded.CreateNewFolder, "Folder", onClick = actions.addFolder) }
                 item { QuickAction(Icons.Rounded.DeleteOutline, "Kosz") { vm.openTrash() } }
                 if (vm.tabs.isNotEmpty()) item { QuickAction(Icons.Rounded.Tab, "Karty (${vm.tabs.size})") { vm.switch(vm.active) } }

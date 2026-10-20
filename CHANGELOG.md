@@ -1,5 +1,18 @@
 # Zmiany
 
+## 0.4.0
+
+- **Synchronizacja folderów** telefonu z NAS, kartą SD, USB lub innym folderem: dwukierunkowa albo jednokierunkowa (kopia zapasowa).
+  - Porównanie trójstronne ze stanem z ostatniej synchronizacji: wiadomo, która strona coś zmieniła, a usunięcie da się odróżnić od nowego pliku.
+  - Konflikty: pytaj, zachowaj obie wersje (`nazwa (konflikt – telefon …)`), nowsza wygrywa, telefon wygrywa albo dysk wygrywa. Konflikt plik ↔ folder nie traci danych. Panel konfliktów pokazuje obie wersje obok siebie.
+  - Gdy dysk jest niedostępny, pliki na telefonie działają normalnie, a karta pary pokazuje, ile zmian czeka na wysłanie. Po powrocie do sieci, przy otwarciu aplikacji i w tle co ~15 min zmiany są wysyłane; podsumowanie trafia do powiadomienia i na pulpit.
+  - Zapis atomowy (plik tymczasowy → podmiana), sprawdzanie, czy plik nie zmienił się w trakcie, kosz dla plików z telefonu nadpisanych lub usuniętych przez synchronizację, wznawianie przerwanego przebiegu.
+  - Zabezpieczenia: synchronizacja zatrzymuje się, gdy folder nagle jest pusty albo miałaby usunąć dużą część plików, i czeka na potwierdzenie.
+  - Podgląd zmian przed wykonaniem, historia przebiegów, wzorce pomijanych plików i opcjonalne ukryte pliki.
+- Pasek boczny: przytrzymanie folderu otwiera menu (nowa karta, ulubione, odłącz); w ustawieniach można ukryć wybrane kategorie albo wszystkie.
+- Przeglądarka: zwarty górny pasek (☰ · wstecz · karty · ⋮), nazwa folderu w linii z liczbą elementów, wyszukiwanie obok przełącznika widoku.
+- Podgląd zdjęć: wszystkie opcje pod ⋮, parametry EXIF w nowej karcie z ikonami.
+
 ## 0.3.1
 
 - Naprawiono zamykanie się aplikacji po zakończeniu wykrywania serwerów NAS (wątek rozpoznawania nazw mDNS był przerywany w sposób, który zabijał proces).

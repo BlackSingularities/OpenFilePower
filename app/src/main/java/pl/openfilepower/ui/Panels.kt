@@ -85,6 +85,7 @@ import pl.openfilepower.*
             if (FileRules.isZip(item)) ActionRow(Icons.Rounded.Unarchive, "Rozpakuj obok archiwum", enabled = !vm.busy) { close?.invoke(); vm.extract(item) }
             ActionRow(Icons.Rounded.Link, "Kopiuj ścieżkę") { vm.copyPath(item) }
             item.place.parent()?.takeIf { it != vm.place }?.let { parent -> ActionRow(Icons.Rounded.FolderOpen, "Pokaż w folderze") { close?.invoke(); vm.navigate(parent, true) } }
+            if (item.directory) ActionRow(Icons.Rounded.SyncAlt, "Synchronizuj z dyskiem…", "NAS, karta SD lub USB") { close?.invoke(); vm.syncDraft = item.place }
             if (item.directory) ActionRow(if (item.place in vm.favorites) Icons.Rounded.Star else Icons.Rounded.StarBorder, if (item.place in vm.favorites) "Usuń z ulubionych" else "Dodaj do ulubionych") { vm.toggleFavorite(item.place) }
         }
         Spacer(Modifier.height(24.dp))
@@ -114,6 +115,10 @@ import pl.openfilepower.*
             SwitchRow(Icons.Rounded.Sensors, "Auto-podgląd w trybie sesji", "Nowe zdjęcie z aparatu lub karty Wi-Fi otwiera się od razu", vm.liveAutoShow) { vm.updateLiveAutoShow(it) }
             ActionRow(Icons.Rounded.PhotoLibrary, "Otwórz galerię", "Oś czasu, albumy, filtry Zdjęcia/RAW/Wideo") { close(); vm.openGallery() }
             InfoRow(Icons.Rounded.Camera, "Obsługiwane RAW", RawFormats.extensions.sorted().joinToString(", ") { it.uppercase() })
+        }
+        Group("Pasek nawigacji", collapsible = true, initiallyExpanded = false) {
+            SwitchRow(Icons.Rounded.Category, "Kategorie w pasku", "Wyłącz, aby ukryć całą sekcję", vm.navCategories.isNotEmpty()) { vm.showAllCategories(it) }
+            Category.entries.forEach { c -> SwitchRow(iconFor(c), c.label, null, c.name !in vm.hiddenCategories) { vm.showCategory(c, it) } }
         }
         Group("Sortowanie") {
             Chips(Icons.AutoMirrored.Rounded.Sort, "Sortuj według", Sort.entries, vm.sort, { it.label }) { vm.updateSort(it) }

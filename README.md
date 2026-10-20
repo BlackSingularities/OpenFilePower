@@ -22,6 +22,7 @@ Pobierz **[OpenFilePower.apk](https://github.com/BlackSingularities/OpenFilePowe
 | Transfery | Postęp w procentach i prędkość, anulowanie, praca w tle z powiadomieniem, natychmiastowe przenoszenie na tym samym nośniku |
 | Galeria i foto | Oś czasu i albumy całej pamięci, filtry Zdjęcia/RAW/Wideo, RAW (ARW, NEF, CR2, CR3, RAF, DNG, RW2, ORF, PEF…) z podglądem z osadzonego JPEG, histogram RGB, maska przepaleń, plakietki EXIF, pokaz slajdów, odtwarzanie filmów |
 | Tryb sesji | Folder obserwowany na żywo (także NAS): nowe zdjęcia z aparatu lub karty Wi-Fi pojawiają się od razu i mogą otwierać się automatycznie |
+| Synchronizacja | Pary folderów telefon ↔ NAS/SD/USB, dwu- lub jednokierunkowo, konflikty z wyborem wersji, praca offline z licznikiem oczekujących zmian, automatycznie po połączeniu i w tle, podgląd i historia |
 | Sieć | Automatyczne wykrywanie NAS (mDNS + skan SMB), lista udziałów, logowanie jako gość lub użytkownik |
 | Narzędzia | Masowa zmiana nazw z podglądem, analiza zajętego miejsca, skróty folderów na ekranie głównym, widok kompaktowy, rozmiar siatki S/M/L |
 | Tablet | Stały panel boczny od 720 dp, inspektor właściwości od 1000 dp; na telefonie szuflada i panele |

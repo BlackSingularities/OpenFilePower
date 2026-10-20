@@ -57,6 +57,8 @@ import pl.openfilepower.*
     }
     LifecycleResumeEffect(Unit) { vm.onResume(); onPauseOrDispose { } }
     val shortcut by ShortcutBus.place.collectAsState()
+    val openSync by ShortcutBus.sync.collectAsState()
+    LaunchedEffect(openSync) { if (openSync) { vm.openSync(); ShortcutBus.sync.value = false } }
     LaunchedEffect(shortcut) { shortcut?.let { vm.openShortcut(it); ShortcutBus.place.value = null } }
     LaunchedEffect(vm.notice) { vm.notice?.let { snacks.showSnackbar(it); vm.notice = null } }
 
@@ -86,6 +88,7 @@ import pl.openfilepower.*
                 when (vm.view) {
                     View.Home -> HomeScreen(vm, medium, HomeActions(grantAccess, { picker.launch(null) }, { network = true }, { settings = true }, inspect))
                     View.Trash -> TrashScreen(vm, medium) { drawer = true }
+                    View.Sync -> SyncScreen(vm, medium) { drawer = true }
                     View.Gallery -> GalleryScreen(vm, medium, actions)
                     else -> BrowserScreen(vm, medium, wide, actions)
                 }
@@ -108,6 +111,7 @@ import pl.openfilepower.*
             picker.launch(Uri.parse("content://com.android.externalstorage.documents/document/primary%3AAndroid%2Fdata"))
         }
         vm.analysis?.let { AnalysisPanel(vm, it) }
+        vm.syncDraft?.let { p -> PairEditor(vm, null, { vm.syncDraft = null }, initialLocal = p) }
         if (network) NetworkPanel(vm, { network = false }) { name, host, share, user, pass, domain -> vm.addNetwork(name, host, share, user, pass, domain); network = false }
         vm.viewer?.let { (images, index) -> ImageViewer(vm, images, index, { vm.viewer = null }, inspect) }
         vm.editor?.let { TextEditor(vm, it) { vm.editor = null } }

@@ -239,6 +239,52 @@ class Files(private val context: Context, private val roots: () -> List<Root>) {
             else -> (context.contentResolver.openOutputStream(item.localUri ?: document(item.place).uri, "wt") ?: error("Nie można zapisać pliku")).use { it.write(bytes) }
         }
     }
+    /** Stan jednego elementu bez listowania folderu nadrzędnego; null – nie istnieje. */
+    fun probe(place: Place): Item? {
+        val root = root(place)
+        val name = place.parts.lastOrNull() ?: root.name
+        return when {
+            root.network -> smb(place).use { f ->
+                if (!f.exists()) null else { val dir = f.isDirectory; Item(place, name, dir, if (dir) 0 else f.length(), f.lastModified(), if (dir) "inode/directory" else FileRules.mime(name)) }
+            }
+            root.direct -> file(place).takeIf { it.exists() }?.let { item(place, it) }
+            else -> runCatching { document(place) }.getOrNull()?.takeIf { it.exists() }?.let { Item(place, name, it.isDirectory, it.length(), it.lastModified(), it.type ?: FileRules.mime(name), it.uri) }
+        }
+    }
+    /** Ustawia datę modyfikacji tam, gdzie nośnik na to pozwala (SAF – nie). */
+    fun setModified(place: Place, time: Long) {
+        if (time <= 0) return
+        val root = root(place)
+        runCatching {
+            when {
+                root.network -> smb(place).use { it.lastModified = time }
+                root.direct -> file(place).setLastModified(time)
+            }
+        }
+    }
+    /**
+     * Zapisuje [source] jako [name] w [parent] bezpiecznie: najpierw do ukrytego pliku tymczasowego,
+     * a dopiero po pełnym zapisie usuwa poprzednią wersję przez [discard] (np. do kosza) i podmienia nazwę.
+     */
+    fun replace(parent: Place, name: String, source: InputStream, size: Long, modified: Long, cancelled: () -> Boolean, progress: (String, Long) -> Unit, discard: (Item) -> Unit = ::delete): Item {
+        FileRules.validateName(name)
+        val temp = ".$name.ofp-part"
+        probe(parent.child(temp))?.let(::delete)
+        var ok = false
+        try {
+            output(parent, temp, "application/octet-stream").use { out ->
+                val total = pump(source, out, name, cancelled, progress)
+                check(size < 0 || total == size) { "Rozmiar źródła zmienił się podczas kopiowania: $name" }
+            }
+            probe(parent.child(name))?.let(discard)
+            rename(Item(parent.child(temp), temp, false, size, 0, "application/octet-stream"), name)
+            ok = true
+        } finally {
+            if (!ok) runCatching { probe(parent.child(temp))?.let(::delete) }
+        }
+        setModified(parent.child(name), modified)
+        return probe(parent.child(name)) ?: error("Nie udało się zapisać $name")
+    }
     fun readText(item: Item, limit: Int = 2 * 1024 * 1024): String {
         require(item.size <= limit) { "Plik jest za duży do edycji (limit ${formatSize(limit.toLong())})" }
         val bytes = input(item).use { it.readBytes() }
