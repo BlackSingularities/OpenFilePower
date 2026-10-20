@@ -176,17 +176,19 @@ class BrowserActions(
 
 @Composable private fun Tabs(vm: ExplorerModel) {
     if (vm.tabs.isEmpty()) return
-    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+    // Wąskie karty: nazwa zawija się w dwie linie, więc obok siebie mieści się ich więcej.
+    val scroll = rememberScrollState()
+    // Nowa lub wybrana ostatnia karta nie chowa się pod przyciskiem „więcej”.
+    LaunchedEffect(vm.active, vm.tabs.size) { if (vm.active == vm.tabs.lastIndex) scroll.animateScrollTo(scroll.maxValue) }
+    Row(Modifier.fillMaxWidth().horizontalScroll(scroll), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
         vm.tabs.forEachIndexed { index, tab ->
             val activeTab = index == vm.active
-            Row(Modifier.dropFolder(vm, tab.place).clip(Pill).background(if (activeTab) Palette.White else Palette.PanelHigh).clickable { vm.switch(index) }.padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(if (vm.rootOf(tab.place)?.network == true) Icons.Rounded.Dns else Icons.Rounded.Folder, null, Modifier.size(15.dp), tint = if (activeTab) Palette.Ink else Palette.TextDim)
-                Spacer(Modifier.width(6.dp))
-                Text(vm.title(tab.place), maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 12.sp, fontWeight = if (activeTab) FontWeight.Bold else FontWeight.Medium, color = if (activeTab) Palette.Ink else Color.White, modifier = Modifier.widthIn(max = 140.dp))
-                Icon(Icons.Rounded.Close, "Zamknij kartę", tint = if (activeTab) Palette.Ink else Palette.TextDim, modifier = Modifier.padding(start = 2.dp).size(26.dp).clip(CircleShape).clickable { vm.closeTab(index) }.padding(5.dp))
+            Row(Modifier.height(40.dp).dropFolder(vm, tab.place).clip(RoundedCornerShape(12.dp)).background(if (activeTab) Palette.White else Palette.PanelHigh).clickable { vm.switch(index) }.padding(start = 8.dp, end = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(vm.title(tab.place), maxLines = 2, overflow = TextOverflow.Ellipsis, fontSize = 11.sp, lineHeight = 12.sp, fontWeight = if (activeTab) FontWeight.Bold else FontWeight.Medium, color = if (activeTab) Palette.Ink else Color.White, modifier = Modifier.widthIn(max = 76.dp))
+                Icon(Icons.Rounded.Close, "Zamknij kartę", tint = if (activeTab) Palette.Ink else Palette.TextDim, modifier = Modifier.size(22.dp).clip(CircleShape).clickable { vm.closeTab(index) }.padding(4.dp))
             }
         }
-        RoundIcon(Icons.Rounded.Add, "Nowa karta", size = 32.dp) { vm.place?.let { vm.navigate(it, true) } }
+        RoundIcon(Icons.Rounded.Add, "Nowa karta", size = 30.dp) { vm.place?.let { vm.navigate(it, true) } }
     }
 }
 
