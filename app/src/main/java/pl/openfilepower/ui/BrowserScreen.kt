@@ -70,7 +70,7 @@ class BrowserActions(
                 vm.place?.let { Breadcrumbs(vm, it) }
                 if (vm.live) LiveBanner(vm)
             }
-            TypeFilters(vm)
+            if (vm.showFilters) TypeFilters(vm)
             InfoLine(vm, category, searchOpen) {
                 if (searchOpen) { vm.query = ""; if (vm.searchResults != null || vm.searching) vm.back() }
                 searchOpen = !searchOpen
@@ -109,13 +109,13 @@ class BrowserActions(
 /** Górny pasek w jednej linii: menu źródeł, wstecz, karty i „więcej”. Nazwa folderu jest w linii informacji. */
 @Composable private fun TopBar(vm: ExplorerModel, medium: Boolean, category: Category?, actions: BrowserActions) {
     Row(Modifier.fillMaxWidth().height(56.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        if (!medium) RoundIcon(Icons.Rounded.Menu, "Źródła i foldery", onClick = actions.menu)
-        RoundIcon(Icons.AutoMirrored.Rounded.ArrowBack, "Wstecz") { vm.back() }
+        if (!medium) RoundIcon(Icons.Rounded.Menu, "Źródła i foldery", size = 40.dp, onClick = actions.menu)
+        RoundIcon(Icons.AutoMirrored.Rounded.ArrowBack, "Wstecz", size = 40.dp) { vm.back() }
         Box(Modifier.weight(1f)) { if (category == null) Tabs(vm) }
-        if (category == null && vm.place != null && medium) RoundIcon(Icons.Rounded.Sensors, if (vm.live) "Zatrzymaj tryb sesji" else "Tryb sesji na żywo", active = vm.live) { vm.toggleLive() }
+        if (category == null && vm.place != null && medium) RoundIcon(Icons.Rounded.Sensors, if (vm.live) "Zatrzymaj tryb sesji" else "Tryb sesji na żywo", active = vm.live, size = 40.dp) { vm.toggleLive() }
         var menu by remember { mutableStateOf(false) }
         Box {
-            RoundIcon(Icons.Rounded.MoreVert, "Więcej") { menu = true }
+            RoundIcon(Icons.Rounded.MoreVert, "Więcej", size = 40.dp) { menu = true }
             DarkMenu(menu, { menu = false }) {
                 if (category == null) {
                     MenuRow(Icons.Rounded.CreateNewFolder, "Nowy folder") { menu = false; actions.newFolder() }
@@ -125,8 +125,9 @@ class BrowserActions(
                 MenuRow(if (vm.showHidden) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility, if (vm.showHidden) "Ukryj ukryte pliki" else "Pokaż ukryte pliki") { menu = false; vm.updateHidden(!vm.showHidden) }
                 vm.place?.let { p -> MenuRow(if (p in vm.favorites) Icons.Rounded.Star else Icons.Rounded.StarBorder, if (p in vm.favorites) "Usuń z ulubionych" else "Dodaj do ulubionych") { menu = false; vm.toggleFavorite(p) } }
                 vm.place?.let { p -> MenuRow(Icons.Rounded.Tab, "Otwórz w nowej karcie") { menu = false; vm.navigate(p, true) } }
-                vm.place?.let { MenuRow(Icons.Rounded.Sensors, if (vm.live) "Zatrzymaj tryb sesji" else "Tryb sesji (nowe zdjęcia na żywo)") { menu = false; vm.toggleLive() } }
+                vm.place?.let { MenuRow(Icons.Rounded.Sensors, if (vm.live) "Zatrzymaj tryb na żywo" else "Na żywo (nowe zdjęcia od razu)") { menu = false; vm.toggleLive() } }
                 vm.place?.let { p -> MenuRow(Icons.Rounded.SyncAlt, "Synchronizuj ten folder z dyskiem") { menu = false; vm.syncDraft = p } }
+                MenuRow(Icons.Rounded.FilterList, if (vm.showFilters) "Ukryj filtry typów" else "Pokaż filtry typów") { menu = false; vm.updateShowFilters(!vm.showFilters) }
                 vm.place?.let { MenuRow(Icons.Rounded.DonutLarge, "Analizuj zajęte miejsce") { menu = false; actions.analyze() } }
                 vm.place?.let { p -> MenuRow(Icons.Rounded.AddToHomeScreen, "Skrót na ekranie głównym") { menu = false; vm.pinShortcut(p) } }
                 MenuRow(Icons.Rounded.PhotoLibrary, "Galeria") { menu = false; vm.openGallery() }
@@ -138,10 +139,10 @@ class BrowserActions(
 }
 
 @Composable private fun SelectionBar(vm: ExplorerModel) {
-    Row(Modifier.fillMaxWidth().height(64.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        RoundIcon(Icons.Rounded.Close, "Zakończ zaznaczanie") { vm.clearSelection() }
+    Row(Modifier.fillMaxWidth().height(52.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        RoundIcon(Icons.Rounded.Close, "Zakończ zaznaczanie", size = 40.dp) { vm.clearSelection() }
         Column(Modifier.weight(1f).padding(start = 4.dp)) {
-            Text("Zaznaczono ${vm.selected.size}", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            Text("Zaznaczono ${vm.selected.size}", fontSize = 17.sp, fontWeight = FontWeight.Bold)
             val items = vm.selectedItems
             Text(formatSize(items.filterNot { it.directory }.sumOf { it.size }) + if (items.any { it.directory }) " + foldery" else "", fontSize = 11.sp, color = Palette.TextDim)
         }
@@ -190,10 +191,12 @@ class BrowserActions(
 @Composable private fun Breadcrumbs(vm: ExplorerModel, p: Place) {
     val scroll = rememberScrollState()
     LaunchedEffect(p) { scroll.animateScrollTo(scroll.maxValue) }
-    Row(Modifier.fillMaxWidth().horizontalScroll(scroll).padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        (0..p.parts.size).forEach { depth ->
+    Row(Modifier.fillMaxWidth().horizontalScroll(scroll), verticalAlignment = Alignment.CenterVertically) {
+        // Bez ostatniego elementu – nazwa bieżącego folderu jest już w karcie.
+        if (p.parts.isEmpty()) Text(vm.rootOf(p)?.let { if (it.network) "NAS" else "Katalog główny" } ?: "", fontSize = 12.sp, color = Palette.TextDim, modifier = Modifier.padding(horizontal = 8.dp))
+        (0 until p.parts.size).forEach { depth ->
             val crumb = p.copy(parts = p.parts.take(depth))
-            val last = depth == p.parts.size
+            val last = depth == p.parts.size - 1
             Text(vm.title(crumb), maxLines = 1, fontSize = 12.sp, fontWeight = if (last) FontWeight.Bold else FontWeight.Medium, color = if (last) Color.White else Palette.TextDim,
                 modifier = Modifier.dropFolder(vm, crumb).clip(Pill).clickable { vm.navigate(crumb) }.padding(horizontal = 8.dp, vertical = 6.dp))
             if (!last) Icon(Icons.Rounded.ChevronRight, null, Modifier.size(14.dp), tint = Palette.TextFaint)
@@ -238,8 +241,7 @@ class BrowserActions(
     Row(Modifier.fillMaxWidth().padding(vertical = 4.dp).clip(Pill).background(Palette.White).padding(start = 14.dp, end = 4.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(8.dp).clip(CircleShape).background(Palette.Record))
         Spacer(Modifier.width(8.dp))
-        Text("Sesja na żywo · nowych: ${vm.liveNew}" + if (vm.liveAutoShow) " · auto-podgląd" else "", color = Palette.Ink, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-        Text(if (vm.liveAutoShow) "Auto: wł." else "Auto: wył.", color = Palette.Ink, fontSize = 11.sp, modifier = Modifier.clip(Pill).clickable { vm.updateLiveAutoShow(!vm.liveAutoShow) }.padding(horizontal = 10.dp, vertical = 6.dp))
+        Text("Na żywo · nowych: ${vm.liveNew}", color = Palette.Ink, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
         Text("Stop", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.clip(Pill).background(Palette.Ink).clickable { vm.toggleLive() }.padding(horizontal = 12.dp, vertical = 6.dp))
     }
 }

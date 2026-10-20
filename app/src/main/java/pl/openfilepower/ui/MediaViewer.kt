@@ -100,7 +100,11 @@ private fun analyze(bitmap: Bitmap): Analysis {
     LaunchedEffect(pager.currentPage) { if (playing != pager.currentPage) playing = -1 }
 
     var exif by remember { mutableStateOf<PhotoExif?>(null) }
-    LaunchedEffect(current) { exif = null; if (current != null && FileRules.isImage(current)) exif = vm.photoExif(current) }
+    LaunchedEffect(current) {
+        exif = null
+        if (current != null && FileRules.isImage(current)) exif = vm.photoExif(current)
+        vm.prefetchExif(media.subList((pager.currentPage - 2).coerceAtLeast(0), (pager.currentPage + 3).coerceAtMost(media.size)))
+    }
 
     var analysis by remember { mutableStateOf<Analysis?>(null) }
     LaunchedEffect(current, showHistogram || showClipping) {

@@ -31,7 +31,7 @@ import pl.openfilepower.*
 @Composable fun Sidebar(vm: ExplorerModel, modifier: Modifier, addLocal: () -> Unit, addNetwork: () -> Unit, settings: () -> Unit, done: () -> Unit = {}) {
     Column(modifier.fillMaxHeight().background(Color(0xFF0B0B0B)).padding(horizontal = 12.dp)) {
         Row(Modifier.height(72.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(Palette.White), contentAlignment = Alignment.Center) { Icon(Icons.Rounded.FolderOpen, null, tint = Palette.Ink, modifier = Modifier.size(22.dp)) }
+            androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(pl.openfilepower.R.drawable.brand_mark), null, Modifier.size(40.dp))
             Spacer(Modifier.width(10.dp))
             Column { Text("OpenFilePower", fontWeight = FontWeight.Black, fontSize = 17.sp); Text("v${BuildConfig.VERSION_NAME}", color = Palette.TextFaint, fontSize = 10.sp) }
         }

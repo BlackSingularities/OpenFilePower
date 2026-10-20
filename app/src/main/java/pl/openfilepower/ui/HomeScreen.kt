@@ -31,23 +31,21 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import pl.openfilepower.*
 
-class HomeActions(val grantAccess: () -> Unit, val addFolder: () -> Unit, val addNetwork: () -> Unit, val settings: () -> Unit, val inspect: (Item) -> Unit)
+class HomeActions(val grantAccess: () -> Unit, val addFolder: () -> Unit, val addNetwork: () -> Unit, val settings: () -> Unit, val inspect: (Item) -> Unit, val menu: () -> Unit = {})
 
 /** Ekran startowy: zwarty pulpit z karuzelami zamiast długich list. */
 @Composable fun HomeScreen(vm: ExplorerModel, medium: Boolean, actions: HomeActions) {
     val side = if (medium) 20.dp else 14.dp
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         item {
             Row(Modifier.padding(horizontal = side), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(48.dp).clip(RoundedCornerShape(14.dp)).background(Palette.White), contentAlignment = Alignment.Center) { Icon(Icons.Rounded.FolderOpen, null, tint = Palette.Ink, modifier = Modifier.size(28.dp)) }
-                Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
-                    Text("OpenFilePower", fontSize = if (medium) 26.sp else 22.sp, fontWeight = FontWeight.Black, maxLines = 1)
-                    Text("Pliki · zdjęcia · RAW · wideo · NAS", fontSize = 12.sp, color = Palette.TextDim, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-                RoundIcon(Icons.Rounded.PhotoLibrary, "Galeria") { vm.openGallery() }
+                if (!medium) { RoundIcon(Icons.Rounded.Menu, "Źródła i foldery", size = 40.dp, onClick = actions.menu); Spacer(Modifier.width(6.dp)) }
+                Text("OpenFilePower", fontSize = if (medium) 22.sp else 19.sp, fontWeight = FontWeight.Black, maxLines = 1, modifier = Modifier.weight(1f))
+                RoundIcon(Icons.Rounded.Dns, "Połącz z NAS", size = 40.dp, onClick = actions.addNetwork)
                 Spacer(Modifier.width(6.dp))
-                RoundIcon(Icons.Rounded.Settings, "Ustawienia", badge = if (vm.release != null) "1" else null, onClick = actions.settings)
+                RoundIcon(Icons.Rounded.PhotoLibrary, "Galeria", size = 40.dp) { vm.openGallery() }
+                Spacer(Modifier.width(6.dp))
+                RoundIcon(Icons.Rounded.Settings, "Ustawienia", size = 40.dp, badge = if (vm.release != null) "1" else null, onClick = actions.settings)
             }
         }
         item { Box(Modifier.padding(horizontal = side)) { UpdateBanner(vm) } }
@@ -59,7 +57,7 @@ class HomeActions(val grantAccess: () -> Unit, val addFolder: () -> Unit, val ad
                 items(vm.spaces.distinctBy { it.first.id }, key = { it.first.id }) { (volume, space) ->
                     val fg = if (vm.access) Palette.Ink else Color.White
                     Column(Modifier.then(if (vm.spaces.size == 1) Modifier.fillParentMaxWidth() else Modifier.width(260.dp)).clip(RoundedCornerShape(20.dp)).background(if (vm.access) Palette.White else Palette.PanelHigh)
-                        .clickable(enabled = vm.access) { vm.navigate(Place(volume.id), vm.tabs.isNotEmpty()) }.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                        .clickable(enabled = vm.access) { vm.navigate(Place(volume.id), vm.tabs.isNotEmpty()) }.padding(horizontal = 14.dp, vertical = 10.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(if (volume.removable) Icons.Rounded.SdCard else Icons.Rounded.Smartphone, null, tint = fg, modifier = Modifier.size(22.dp))
                             Spacer(Modifier.width(10.dp))
@@ -78,27 +76,15 @@ class HomeActions(val grantAccess: () -> Unit, val addFolder: () -> Unit, val ad
             }
         }
 
-        item {
-            LazyRow(contentPadding = PaddingValues(horizontal = side), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                item { QuickAction(Icons.Rounded.PhotoLibrary, "Galeria") { vm.openGallery() } }
-                item { QuickAction(Icons.Rounded.Camera, "RAW") { vm.galleryFilter = MediaFilter.RAW; vm.openGallery() } }
-                item { QuickAction(Icons.Rounded.Dns, "NAS", onClick = actions.addNetwork) }
-                item { QuickAction(Icons.Rounded.SyncAlt, "Synchronizacja") { vm.openSync() } }
-                item { QuickAction(Icons.Rounded.CreateNewFolder, "Folder", onClick = actions.addFolder) }
-                item { QuickAction(Icons.Rounded.DeleteOutline, "Kosz") { vm.openTrash() } }
-                if (vm.tabs.isNotEmpty()) item { QuickAction(Icons.Rounded.Tab, "Karty (${vm.tabs.size})") { vm.switch(vm.active) } }
-            }
-        }
-
         val photos = vm.recent.filter { FileRules.isMedia(it) }
         if (photos.isNotEmpty()) {
-            item { Header("Najnowsze zdjęcia i filmy", side, "Galeria") { vm.openGallery() } }
+            item { Header("Najnowsze", side, "Galeria") { vm.openGallery() } }
             item {
                 LazyRow(contentPadding = PaddingValues(horizontal = side), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     items(photos, key = { "p:" + it.place }) { item ->
-                        Box(Modifier.size(if (medium) 112.dp else 92.dp).clip(RoundedCornerShape(10.dp)).background(Palette.PanelHigh).clickable { vm.viewer = photos to photos.indexOf(item) }) {
+                        Box(Modifier.size(if (medium) 104.dp else 84.dp).clip(RoundedCornerShape(10.dp)).background(Palette.PanelHigh).clickable { vm.viewer = photos to photos.indexOf(item) }) {
                             AsyncImage(item.imageModel(), item.name, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-                            if (FileRules.isVideo(item)) Icon(Icons.Rounded.PlayCircle, null, Modifier.align(Alignment.Center).size(26.dp), tint = Color.White)
+                            if (FileRules.isVideo(item)) Icon(Icons.Rounded.PlayCircle, null, Modifier.align(Alignment.Center).size(24.dp), tint = Color.White)
                             if (FileRules.isRaw(item)) Text("RAW", fontSize = 8.sp, fontWeight = FontWeight.Black, color = Palette.Ink, modifier = Modifier.align(Alignment.BottomStart).padding(4.dp).clip(Pill).background(Palette.White).padding(horizontal = 4.dp))
                         }
                     }
@@ -106,28 +92,21 @@ class HomeActions(val grantAccess: () -> Unit, val addFolder: () -> Unit, val ad
             }
         }
 
-        val documents = vm.recent.filterNot { FileRules.isMedia(it) }
-        if (documents.isNotEmpty()) {
-            item { Header("Ostatnie pliki", side) }
+        // Jedna sekcja miejsc: foldery główne, ulubione i dodane źródła (SAF/NAS) zamiast trzech osobnych.
+        val places = vm.mainFolders.map { (label, p) -> Triple("m:$p", label, p) } +
+            vm.favorites.map { Triple("f:$it", vm.title(it), it) } +
+            vm.roots.filterNot { it.direct }.distinctBy { it.id }.map { Triple("s:" + it.id, it.name, Place(it.id)) }
+        if (places.isNotEmpty()) {
+            item { Header("Miejsca", side) }
             item {
-                LazyRow(contentPadding = PaddingValues(horizontal = side), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(documents, key = { "r:" + it.place }) { RecentCard(vm, it, actions.inspect) }
-                }
-            }
-        }
-
-        val main = vm.mainFolders
-        if (main.isNotEmpty()) {
-            item { Header("Foldery główne", side) }
-            item {
-                LazyRow(contentPadding = PaddingValues(horizontal = side), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(main, key = { "m:" + it.first }) { (label, p) ->
-                        Column(Modifier.width(84.dp).dropFolder(vm, p).pressable(label) { vm.navigate(p, vm.tabs.isNotEmpty()) }, horizontalAlignment = Alignment.CenterHorizontally) {
-                            Box(Modifier.size(56.dp).clip(RoundedCornerShape(18.dp)).background(Palette.PanelHigh), contentAlignment = Alignment.Center) {
-                                Icon(folderIcon(p.parts.last()), null, Modifier.size(24.dp))
-                            }
-                            Text(label, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 5.dp))
+                LazyRow(contentPadding = PaddingValues(horizontal = side), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    items(places.distinctBy { it.first }, key = { it.first }) { (key, label, p) ->
+                        val icon = when {
+                            key.startsWith("f:") -> Icons.Rounded.Star
+                            key.startsWith("s:") -> if (vm.rootOf(p)?.network == true) Icons.Rounded.Dns else Icons.Rounded.FolderSpecial
+                            else -> folderIcon(p.parts.last())
                         }
+                        Chip(label, false, Modifier.dropFolder(vm, p), icon = icon) { vm.navigate(p, vm.tabs.isNotEmpty()) }
                     }
                 }
             }
@@ -136,14 +115,14 @@ class HomeActions(val grantAccess: () -> Unit, val addFolder: () -> Unit, val ad
         if (vm.access) {
             item { Header("Kategorie", side) }
             item {
-                LazyRow(contentPadding = PaddingValues(horizontal = side), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                LazyRow(contentPadding = PaddingValues(horizontal = side), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     items(Category.entries, key = { "c:" + it.name }) { c ->
                         val stat = vm.stats.firstOrNull { it.category == c }
-                        Column(Modifier.width(118.dp).pressable(c.label) { if (c == Category.RAW) { vm.galleryFilter = MediaFilter.RAW; vm.openGallery() } else vm.openCategory(c) }.clip(RoundedCornerShape(18.dp)).background(Palette.PanelHigh).padding(12.dp)) {
-                            Icon(iconFor(c), null, tint = Color.White, modifier = Modifier.size(22.dp))
-                            Spacer(Modifier.height(10.dp))
-                            Text(c.label, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                            Text(stat?.let { "${it.count} · ${formatSize(it.bytes)}" } ?: "…", fontSize = 10.sp, color = Palette.TextDim, maxLines = 1)
+                        Row(Modifier.pressable(c.label) { if (c == Category.RAW) { vm.galleryFilter = MediaFilter.RAW; vm.openGallery() } else vm.openCategory(c) }.clip(Pill).background(Palette.PanelHigh).padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(iconFor(c), null, tint = Color.White, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(7.dp))
+                            Text(c.label, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                            stat?.let { Text(" ${it.count}", fontSize = 11.sp, color = Palette.TextDim, maxLines = 1) }
                         }
                     }
                 }
@@ -158,33 +137,17 @@ class HomeActions(val grantAccess: () -> Unit, val addFolder: () -> Unit, val ad
                 }
             }
         }
-        if (vm.favorites.isNotEmpty()) {
-            item { Header("Ulubione", side) }
-            item {
-                LazyRow(contentPadding = PaddingValues(horizontal = side), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    items(vm.favorites, key = { "f:$it" }) { p -> Chip(vm.title(p), false, icon = Icons.Rounded.Star) { vm.navigate(p, vm.tabs.isNotEmpty()) } }
-                }
-            }
-        }
-        val others = vm.roots.filterNot { it.direct }.distinctBy { it.id }
-        if (others.isNotEmpty()) {
-            item { Header("Foldery i serwery", side) }
+
+        val documents = vm.recent.filterNot { FileRules.isMedia(it) }
+        if (documents.isNotEmpty()) {
+            item { Header("Ostatnie pliki", side) }
             item {
                 LazyRow(contentPadding = PaddingValues(horizontal = side), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(others, key = { "s:" + it.id }) { root ->
-                        Row(Modifier.pressable(root.name) { vm.navigate(Place(root.id), vm.tabs.isNotEmpty()) }.clip(RoundedCornerShape(16.dp)).background(Palette.PanelHigh).padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(if (root.network) Icons.Rounded.Dns else Icons.Rounded.FolderSpecial, null, Modifier.size(20.dp))
-                            Spacer(Modifier.width(8.dp))
-                            Column(Modifier.widthIn(max = 180.dp)) {
-                                Text(root.name, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                Text(if (root.network) root.address.removePrefix("smb://").trimEnd('/') else "Folder systemowy", fontSize = 10.sp, color = Palette.TextDim, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            }
-                        }
-                    }
+                    items(documents, key = { "r:" + it.place }) { RecentCard(vm, it, actions.inspect) }
                 }
             }
         }
-        item { Text("BEZ REKLAM · BEZ TELEMETRII · OPEN SOURCE · v${BuildConfig.VERSION_NAME}", color = Palette.TextFaint, fontSize = 10.sp, letterSpacing = 1.sp, modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp), textAlign = TextAlign.Center) }
+        item { Spacer(Modifier.height(24.dp)) }
     }
 }
 
@@ -197,14 +160,6 @@ fun folderIcon(name: String): ImageVector = when (name) {
     Row(Modifier.fillMaxWidth().padding(start = side + 2.dp, end = side - 4.dp, top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(title.uppercase(), color = Palette.White, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.4.sp, modifier = Modifier.weight(1f))
         if (action != null) Text(action, color = Palette.TextDim, fontSize = 12.sp, modifier = Modifier.clip(Pill).clickable(onClick = onAction).padding(horizontal = 10.dp, vertical = 4.dp))
-    }
-}
-
-@Composable private fun QuickAction(icon: ImageVector, label: String, onClick: () -> Unit) {
-    Row(Modifier.pressable(label, onClick = onClick).clip(Pill).background(Palette.PanelHigh).padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-        Icon(icon, null, Modifier.size(18.dp))
-        Spacer(Modifier.width(7.dp))
-        Text(label, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
     }
 }
 

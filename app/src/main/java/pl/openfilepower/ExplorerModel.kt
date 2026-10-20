@@ -12,6 +12,7 @@ import androidx.exifinterface.media.ExifInterface
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.*
+import kotlinx.coroutines.sync.withPermit
 import java.io.File
 import java.util.UUID
 
@@ -80,7 +81,8 @@ class ExplorerModel(app: Application) : AndroidViewModel(app) {
     var thumbnails by mutableStateOf(prefs.flag("thumbnails", true)); private set
     var sort by mutableStateOf(runCatching { Sort.valueOf(prefs.text("sort", Sort.NAME.name)) }.getOrDefault(Sort.NAME)); private set
     var autoUpdate by mutableStateOf(prefs.autoUpdate); private set
-    var compact by mutableStateOf(prefs.flag("compact", false)); private set
+    var compact by mutableStateOf(prefs.flag("compact", true)); private set
+    var showFilters by mutableStateOf(prefs.flag("showFilters", false)); private set
     var gridSize by mutableStateOf(runCatching { GridSize.valueOf(prefs.text("gridSize", GridSize.MEDIUM.name)) }.getOrDefault(GridSize.MEDIUM)); private set
     var typeFilter by mutableStateOf(TypeFilter.ALL)
     /** Kategorie ukryte w pasku nawigacji (nazwy enum). */
@@ -103,7 +105,7 @@ class ExplorerModel(app: Application) : AndroidViewModel(app) {
     var galleryAlbums by mutableStateOf(false)
     var galleryAlbum by mutableStateOf<Place?>(null); private set
     var live by mutableStateOf(false); private set
-    var liveAutoShow by mutableStateOf(prefs.flag("liveAutoShow", true)); private set
+    var galleryByMonth by mutableStateOf(prefs.flag("galleryByMonth", false)); private set
     var liveNew by mutableStateOf(0); private set
     private var liveJob: Job? = null
 
@@ -461,7 +463,7 @@ class ExplorerModel(app: Application) : AndroidViewModel(app) {
                     info += "Zawartość" to "${m.files} plików, ${m.folders - 1} folderów"
                 }
                 if (FileRules.isImage(item)) runCatching {
-                    val exif = files.exif(item)
+                    val exif = runBlocking { cachedExif(item) } ?: error("Brak EXIF")
                     val photo = PhotoExif.from(exif)
                     if (FileRules.isRaw(item)) info += "Format" to "RAW (${item.extension.uppercase()})"
                     exif.getAttribute(ExifInterface.TAG_MODEL)?.let { info += "Aparat" to it }
@@ -667,6 +669,7 @@ class ExplorerModel(app: Application) : AndroidViewModel(app) {
 
     // ——— Kompaktowość ———
     fun updateCompact(v: Boolean) { compact = v; prefs.setFlag("compact", v) }
+    fun updateShowFilters(v: Boolean) { showFilters = v; prefs.setFlag("showFilters", v); if (!v) typeFilter = TypeFilter.ALL }
     fun updateGridSize(v: GridSize) { gridSize = v; prefs.setText("gridSize", v.name) }
     fun clearRecentPlaces() { recentPlaces = emptyList(); prefs.savePlaces("recentPlaces", emptyList()) }
 
@@ -739,7 +742,7 @@ class ExplorerModel(app: Application) : AndroidViewModel(app) {
     }
     /**
      * Tryb sesji (jak Fotopodgląd): co 2 s sprawdza bieżący folder; nowe zdjęcia z aparatu lub karty Wi-Fi
-     * pojawiają się od razu, a przy włączonym [liveAutoShow] otwiera się najnowsze.
+     * pojawiają się od razu, a najnowsze otwiera się automatycznie w przeglądarce.
      */
     fun toggleLive() {
         if (live) { stopLive(); return }
@@ -758,18 +761,33 @@ class ExplorerModel(app: Application) : AndroidViewModel(app) {
                     if (media.isNotEmpty()) {
                         liveNew += media.size
                         notice = "Nowe: ${media.size} · ${media.last().name}"
-                        if (liveAutoShow) {
-                            val all = visible.filter { FileRules.isMedia(it) && it.localUri != null }
-                            val newest = media.maxBy { it.modified }
-                            all.indexOfFirst { it.place == newest.place }.takeIf { it >= 0 }?.let { viewer = all to it }
-                        }
+                        // Tryb na żywo zawsze otwiera najnowsze zdjęcie – po to się go włącza.
+                        val all = visible.filter { FileRules.isMedia(it) && it.localUri != null }
+                        val newest = media.maxBy { it.modified }
+                        all.indexOfFirst { it.place == newest.place }.takeIf { it >= 0 }?.let { viewer = all to it }
                     }
                 }
             } finally { live = false }
         }
     }
-    fun updateLiveAutoShow(v: Boolean) { liveAutoShow = v; prefs.setFlag("liveAutoShow", v) }
-    suspend fun photoExif(item: Item): PhotoExif? = withContext(Dispatchers.IO) { runCatching { PhotoExif.from(files.exif(item)) }.getOrNull() }
+    fun updateGalleryByMonth(v: Boolean) { galleryByMonth = v; prefs.setFlag("galleryByMonth", v) }
+
+    // ——— EXIF: pamięć podręczna i wczytywanie z wyprzedzeniem ———
+    private class ExifEntry(val modified: Long, val exif: ExifInterface?)
+    private val exifCache = object : android.util.LruCache<Place, ExifEntry>(300) {}
+    private val exifGate = kotlinx.coroutines.sync.Semaphore(3)
+    /** EXIF z pamięci podręcznej; przy zmianie pliku (data modyfikacji) czytany ponownie. */
+    private suspend fun cachedExif(item: Item): ExifInterface? {
+        exifCache.get(item.place)?.takeIf { it.modified == item.modified }?.let { return it.exif }
+        val exif = exifGate.withPermit { withContext(Dispatchers.IO) { runCatching { files.exif(item) }.getOrNull() } }
+        exifCache.put(item.place, ExifEntry(item.modified, exif))
+        return exif
+    }
+    suspend fun photoExif(item: Item): PhotoExif? = cachedExif(item)?.let { runCatching { PhotoExif.from(it) }.getOrNull() }
+    /** Wczytuje EXIF sąsiednich zdjęć w tle, by przewijanie w przeglądarce pokazywało dane od razu. */
+    fun prefetchExif(items: List<Item>) {
+        items.filter { FileRules.isImage(it) && exifCache.get(it.place)?.modified != it.modified }.forEach { viewModelScope.launch { cachedExif(it) } }
+    }
     fun closeAnalysis() { analysisJob?.cancel(); analysis = null }
 
     // ——— Skróty na ekranie głównym ———
@@ -779,7 +797,7 @@ class ExplorerModel(app: Application) : AndroidViewModel(app) {
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
         val shortcut = androidx.core.content.pm.ShortcutInfoCompat.Builder(context, "folder:" + p.toString().hashCode())
             .setShortLabel(title(p).take(24)).setLongLabel(pathOf(p).take(60))
-            .setIcon(androidx.core.graphics.drawable.IconCompat.createWithResource(context, R.mipmap.ic_launcher)).setIntent(intent).build()
+            .setIcon(androidx.core.graphics.drawable.IconCompat.createWithResource(context, R.mipmap.ic_shortcut_folder)).setIntent(intent).build()
         if (androidx.core.content.pm.ShortcutManagerCompat.isRequestPinShortcutSupported(context)) androidx.core.content.pm.ShortcutManagerCompat.requestPinShortcut(context, shortcut, null)
         else notice = "Ekran główny nie obsługuje skrótów"
     }
