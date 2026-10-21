@@ -57,3 +57,9 @@ Jeśli Android zgłasza konflikt podpisu przy instalacji, na telefonie jest kopi
 ## Licencja
 
 MIT. Zależności zachowują własne licencje (m.in. jcifs-ng: LGPL-2.1). Zobacz [informacje o komponentach](NOTICE.md) i [scenariusze weryfikacji](docs/QA.md).
+
+---
+
+**Projekt i wykonanie: [redzikowski.com](https://redzikowski.com)**
+
+<a href="https://buycoffee.to/adamredzikowski" target="_blank"><img src="https://buycoffee.to/static/img/share/share-button-dark--pl.png" style="width: 351px; height: 92px" width="351" height="92" alt="Postaw kawę dla adamredzikowski na buycoffee.to"></a>
