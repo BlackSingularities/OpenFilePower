@@ -110,7 +110,7 @@ class BrowserActions(
 
 /** Górny pasek w jednej linii: menu źródeł, wstecz, karty i „więcej”. Nazwa folderu jest w linii informacji. */
 @Composable private fun TopBar(vm: ExplorerModel, medium: Boolean, category: Category?, actions: BrowserActions) {
-    Row(Modifier.fillMaxWidth().height(56.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+    Row(Modifier.fillMaxWidth().height(60.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         if (!medium) RoundIcon(Icons.Rounded.Menu, "Źródła i foldery", size = 40.dp, onClick = actions.menu)
         RoundIcon(Icons.AutoMirrored.Rounded.ArrowBack, "Wstecz", size = 40.dp) { vm.back() }
         Box(Modifier.weight(1f)) { if (category == null) Tabs(vm) }
@@ -176,19 +176,33 @@ class BrowserActions(
 
 @Composable private fun Tabs(vm: ExplorerModel) {
     if (vm.tabs.isEmpty()) return
-    // Wąskie karty: nazwa zawija się w dwie linie, więc obok siebie mieści się ich więcej.
+    // Karty siedzą w jednej „szufladzie”: aktywna jest jasna i pokazuje folder nadrzędny oraz przycisk zamknięcia,
+    // pozostałe są przezroczyste i zwarte, żeby obok mieściło się ich więcej.
     val scroll = rememberScrollState()
-    // Nowa lub wybrana ostatnia karta nie chowa się pod przyciskiem „więcej”.
     LaunchedEffect(vm.active, vm.tabs.size) { if (vm.active == vm.tabs.lastIndex) scroll.animateScrollTo(scroll.maxValue) }
-    Row(Modifier.fillMaxWidth().horizontalScroll(scroll), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-        vm.tabs.forEachIndexed { index, tab ->
-            val activeTab = index == vm.active
-            Row(Modifier.height(40.dp).dropFolder(vm, tab.place).clip(RoundedCornerShape(12.dp)).background(if (activeTab) Palette.White else Palette.PanelHigh).clickable { vm.switch(index) }.padding(start = 8.dp, end = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(vm.title(tab.place), maxLines = 2, overflow = TextOverflow.Ellipsis, fontSize = 11.sp, lineHeight = 12.sp, fontWeight = if (activeTab) FontWeight.Bold else FontWeight.Medium, color = if (activeTab) Palette.Ink else Color.White, modifier = Modifier.widthIn(max = 76.dp))
-                Icon(Icons.Rounded.Close, "Zamknij kartę", tint = if (activeTab) Palette.Ink else Palette.TextDim, modifier = Modifier.size(22.dp).clip(CircleShape).clickable { vm.closeTab(index) }.padding(4.dp))
-            }
+    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Palette.PanelHigh).padding(3.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.weight(1f, fill = false).horizontalScroll(scroll), horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
+            vm.tabs.forEachIndexed { index, tab -> TabChip(vm, tab.place, index == vm.active, { vm.switch(index) }) { vm.closeTab(index) } }
         }
-        RoundIcon(Icons.Rounded.Add, "Nowa karta", size = 30.dp) { vm.place?.let { vm.navigate(it, true) } }
+        Icon(Icons.Rounded.Add, "Nowa karta", tint = Palette.TextDim, modifier = Modifier.padding(start = 2.dp).size(38.dp).clip(RoundedCornerShape(15.dp)).clickable { vm.place?.let { vm.navigate(it, true) } }.padding(9.dp))
+    }
+}
+
+@Composable private fun TabChip(vm: ExplorerModel, place: Place, active: Boolean, onClick: () -> Unit, onClose: () -> Unit) {
+    val bg by androidx.compose.animation.animateColorAsState(if (active) Palette.White else Color.Transparent, label = "tabBg")
+    val fg = if (active) Palette.Ink else Palette.TextDim
+    val network = vm.rootOf(place)?.network == true
+    Row(Modifier.height(38.dp).dropFolder(vm, place).clip(RoundedCornerShape(15.dp)).background(bg).clickable(onClick = onClick).padding(start = 10.dp, end = if (active) 4.dp else 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon(if (network) Icons.Rounded.Lan else if (place.parts.isEmpty()) Icons.Rounded.PhoneAndroid else Icons.Rounded.Folder, null, tint = fg, modifier = Modifier.size(16.dp))
+        Spacer(Modifier.width(7.dp))
+        Column(Modifier.widthIn(max = if (active) 120.dp else 84.dp)) {
+            Text(vm.title(place), maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 13.sp, lineHeight = 15.sp, fontWeight = if (active) FontWeight.Bold else FontWeight.Medium, color = if (active) Palette.Ink else Color.White)
+            if (active) Text(
+                if (place.parts.isEmpty()) (if (network) "NAS" else "Katalog główny") else vm.title(place.copy(parts = place.parts.dropLast(1))),
+                maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 10.sp, lineHeight = 11.sp, color = Palette.Ink.copy(alpha = 0.55f),
+            )
+        }
+        if (active) Icon(Icons.Rounded.Close, "Zamknij kartę", tint = Palette.Ink, modifier = Modifier.padding(start = 4.dp).size(26.dp).clip(CircleShape).background(Palette.Ink.copy(alpha = 0.07f)).clickable(onClick = onClose).padding(6.dp))
     }
 }
 
