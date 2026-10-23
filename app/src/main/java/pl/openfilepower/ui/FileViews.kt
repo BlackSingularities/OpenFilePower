@@ -66,12 +66,18 @@ fun iconFor(category: Category): ImageVector = when (category) {
 fun describe(item: Item): String = if (item.directory) (if (item.children >= 0) "Folder · ${item.children} elem." else "Folder")
     else listOfNotNull(item.extension.uppercase().ifBlank { null }, formatSize(item.size), formatShortDate(item.modified).takeIf { item.modified > 0 }).joinToString(" · ")
 
-/** Ikona pliku albo miniatura zdjęcia/filmu; przytrzymanie rozpoczyna przeciąganie. */
-@Composable fun FileGlyph(item: Item, vm: ExplorerModel, size: androidx.compose.ui.unit.Dp = 44.dp, corner: androidx.compose.ui.unit.Dp = 12.dp, draggable: Boolean = true) {
+/**
+ * Ikona pliku albo miniatura zdjęcia/filmu; przytrzymanie rozpoczyna przeciąganie.
+ * `onClick` jest obsługiwany wewnątrz źródła przeciągania – bez tego dotknięcie samej
+ * ikony lub miniatury nie dochodziło do klikalnego wiersza/kafelka wyżej.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable fun FileGlyph(item: Item, vm: ExplorerModel, size: androidx.compose.ui.unit.Dp = 44.dp, corner: androidx.compose.ui.unit.Dp = 12.dp, draggable: Boolean = true, onClick: (() -> Unit)? = null, onLongClick: (() -> Unit)? = null) {
     Box(
         Modifier.size(size).clip(RoundedCornerShape(corner)).background(if (item.directory) Color.White.copy(alpha = 0.1f) else Palette.PanelHigh)
             .then(if (draggable) Modifier.dragAndDropSource(transferData = { _ -> vm.drag = item; DragAndDropTransferData(ClipData.newPlainText("OpenFilePower", item.name)) }) else Modifier)
-            .semantics { contentDescription = "Przytrzymaj, aby przeciągnąć ${item.name}" },
+            .then(if (onClick != null) Modifier.combinedClickable(onClick = onClick, onLongClick = onLongClick) else Modifier)
+            .semantics { contentDescription = if (onClick != null) item.name else "Przytrzymaj, aby przeciągnąć ${item.name}" },
         contentAlignment = Alignment.Center,
     ) {
         Icon(iconFor(item), null, Modifier.size(size * 0.52f), tint = if (item.directory) Color.White else Palette.TextDim)
@@ -100,7 +106,7 @@ fun describe(item: Item): String = if (item.directory) (if (item.children >= 0) 
             .padding(horizontal = 8.dp, vertical = if (vm.compact) 3.dp else 7.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        FileGlyph(item, vm, size = if (vm.compact) 32.dp else 44.dp, corner = if (vm.compact) 8.dp else 12.dp); Spacer(Modifier.width(if (vm.compact) 10.dp else 12.dp))
+        FileGlyph(item, vm, size = if (vm.compact) 32.dp else 44.dp, corner = if (vm.compact) 8.dp else 12.dp, onClick = { if (vm.selecting) vm.select(item) else vm.open(item) }, onLongClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); vm.select(item) }); Spacer(Modifier.width(if (vm.compact) 10.dp else 12.dp))
         Column(Modifier.weight(1f)) {
             Text(item.name, fontSize = if (vm.compact) 13.sp else 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Medium, color = if (item.hidden) Palette.TextDim else Color.White)
             Text(if (showPath) vm.pathOf(item.place.parent() ?: item.place) else describe(item), color = Palette.TextDim, fontSize = if (vm.compact) 10.sp else 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -122,7 +128,7 @@ fun describe(item: Item): String = if (item.directory) (if (item.children >= 0) 
             .padding(8.dp),
     ) {
         BoxWithConstraints(Modifier.fillMaxWidth()) {
-            FileGlyph(item, vm, size = maxWidth, corner = 14.dp)
+            FileGlyph(item, vm, size = maxWidth, corner = 14.dp, onClick = { if (vm.selecting) vm.select(item) else vm.open(item) }, onLongClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); vm.select(item) })
             if (vm.selecting || selected) SelectionMark(selected, Modifier.align(Alignment.TopEnd).padding(6.dp))
         }
         Spacer(Modifier.height(8.dp))
