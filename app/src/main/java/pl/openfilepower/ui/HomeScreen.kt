@@ -118,13 +118,13 @@ class HomeActions(val grantAccess: () -> Unit, val addFolder: () -> Unit, val ad
                 LazyRow(contentPadding = PaddingValues(horizontal = side), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                     items(Category.entries, key = { "c:" + it.name }) { c ->
                         val stat = vm.stats.firstOrNull { it.category == c }
-                        Row(Modifier.pressable(c.label) { if (c == Category.RAW) { vm.galleryFilter = MediaFilter.RAW; vm.openGallery() } else vm.openCategory(c) }.clip(Pill).background(Color.White.copy(alpha = 0.08f)).padding(start = 11.dp, end = if (stat != null) 7.dp else 13.dp, top = 7.dp, bottom = 7.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(iconFor(c), null, tint = Color.White, modifier = Modifier.size(16.dp))
+                        Row(Modifier.pressable(c.label) { if (c == Category.RAW) { vm.galleryFilter = MediaFilter.RAW; vm.openGallery() } else vm.openCategory(c) }.clip(Pill).background(Palette.White.copy(alpha = 0.08f)).padding(start = 11.dp, end = if (stat != null) 7.dp else 13.dp, top = 7.dp, bottom = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(iconFor(c), null, tint = Palette.White, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(7.dp))
                             Text(c.label, fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 1)
                             if (stat != null) {
                                 Spacer(Modifier.width(7.dp))
-                                Text("${stat.count}", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Palette.TextDim, maxLines = 1, modifier = Modifier.clip(Pill).background(Color.White.copy(alpha = 0.1f)).padding(horizontal = 6.dp, vertical = 2.dp))
+                                Text("${stat.count}", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Palette.TextDim, maxLines = 1, modifier = Modifier.clip(Pill).background(Palette.White.copy(alpha = 0.1f)).padding(horizontal = 6.dp, vertical = 2.dp))
                             }
                         }
                     }
@@ -161,7 +161,7 @@ fun folderIcon(name: String): ImageVector = when (name) {
 
 /** Karta nośnika: pierścień zajętości, nazwa i wolne miejsce. */
 @Composable private fun SpaceCard(volume: StorageAccess.Volume, space: StorageAccess.Space, access: Boolean, full: Boolean, wide: Boolean, onClick: () -> Unit) {
-    val fg = if (access) Palette.Ink else Color.White
+    val fg = if (access) Palette.Ink else Palette.White
     val critical = space.fraction > 0.9f
     Row(
         Modifier.then(if (full) Modifier.fillMaxWidth() else Modifier.width(if (wide) 290.dp else 264.dp))
@@ -224,7 +224,7 @@ fun folderIcon(name: String): ImageVector = when (name) {
         Text("Potrzebny, by pokazać całą pamięć, galerię, RAW-y, kategorie, miejsce na dysku i kosz. Dane nie opuszczają urządzenia.", color = Palette.Ink.copy(alpha = 0.7f), fontSize = 13.sp, lineHeight = 18.sp)
         Spacer(Modifier.height(14.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("Nadaj dostęp", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp, modifier = Modifier.pressable("Nadaj dostęp", onClick = grant).clip(Pill).background(Palette.Ink).padding(horizontal = 18.dp, vertical = 10.dp))
+            Text("Nadaj dostęp", color = Palette.White, fontWeight = FontWeight.Bold, fontSize = 14.sp, modifier = Modifier.pressable("Nadaj dostęp", onClick = grant).clip(Pill).background(Palette.Ink).padding(horizontal = 18.dp, vertical = 10.dp))
             Text("Tylko wybrany folder", color = Palette.Ink, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, modifier = Modifier.clip(Pill).clickable(onClick = folder).padding(horizontal = 12.dp, vertical = 10.dp))
         }
     }
@@ -249,15 +249,15 @@ fun folderIcon(name: String): ImageVector = when (name) {
         if (r == null) return@AnimatedVisibility
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(Palette.PanelHigh).border(1.dp, Palette.Line, RoundedCornerShape(22.dp)).padding(14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(36.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.1f)), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Rounded.SystemUpdate, null, tint = Color.White, modifier = Modifier.size(20.dp))
+                Box(Modifier.size(36.dp).clip(CircleShape).background(Palette.White.copy(alpha = 0.1f)), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Rounded.SystemUpdate, null, tint = Palette.White, modifier = Modifier.size(20.dp))
                 }
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Text(vm.updateProgress?.let { "Pobieranie ${r.version} · ${(it * 100).toInt()}%" } ?: "Nowa wersja ${r.version}", fontSize = 14.sp, fontWeight = FontWeight.Bold)
                     Text(if (vm.updateBusy) "Nie zamykaj aplikacji" else "Podpis i suma SHA-256 są sprawdzane przed instalacją", color = Palette.TextDim, fontSize = 11.sp, lineHeight = 15.sp)
                 }
-                if (!vm.updateBusy) Text(if (vm.downloaded != null) "Zainstaluj" else "Aktualizuj", color = Palette.Ink, fontWeight = FontWeight.Bold, fontSize = 13.sp, modifier = Modifier.padding(start = 8.dp).clip(Pill).background(Color.White).clickable { vm.installUpdate() }.padding(horizontal = 14.dp, vertical = 8.dp))
+                if (!vm.updateBusy) Text(if (vm.downloaded != null) "Zainstaluj" else "Aktualizuj", color = Palette.Ink, fontWeight = FontWeight.Bold, fontSize = 13.sp, modifier = Modifier.padding(start = 8.dp).clip(Pill).background(Palette.White).clickable { vm.installUpdate() }.padding(horizontal = 14.dp, vertical = 8.dp))
                 if (!vm.updateBusy) Icon(Icons.Rounded.Close, "Później", tint = Palette.TextDim, modifier = Modifier.padding(start = 4.dp).size(32.dp).clip(CircleShape).clickable { vm.updateBannerHidden = true }.padding(6.dp))
             }
             vm.updateProgress?.let { Meter(it, Modifier.fillMaxWidth().padding(top = 10.dp)) }

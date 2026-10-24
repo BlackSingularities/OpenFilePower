@@ -156,7 +156,7 @@ import pl.openfilepower.*
         Text(text, fontSize = 12.sp, color = Palette.TextDim, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
-@Composable private fun Status(icon: ImageVector, text: String, color: Color = Color.White) {
+@Composable private fun Status(icon: ImageVector, text: String, color: Color = Palette.White) {
     Row(Modifier.padding(vertical = 2.dp), verticalAlignment = Alignment.Top) {
         Icon(icon, null, Modifier.size(16.dp).padding(top = 1.dp), tint = color)
         Spacer(Modifier.width(8.dp))
@@ -354,7 +354,7 @@ import pl.openfilepower.*
 
 @Composable private fun Version(modifier: Modifier, icon: ImageVector, label: String, e: SyncEntry?, other: SyncEntry?) {
     val newer = e != null && other != null && !e.directory && e.modified > other.modified + SyncPlanner.TOLERANCE
-    Column(modifier.clip(RoundedCornerShape(14.dp)).background(if (newer) Color.White.copy(alpha = 0.14f) else Color.White.copy(alpha = 0.05f)).padding(10.dp)) {
+    Column(modifier.clip(RoundedCornerShape(14.dp)).background(if (newer) Palette.White.copy(alpha = 0.14f) else Palette.White.copy(alpha = 0.05f)).padding(10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(icon, null, Modifier.size(14.dp), tint = Palette.TextDim)
             Spacer(Modifier.width(6.dp))
@@ -377,7 +377,7 @@ import pl.openfilepower.*
             history.forEach { r ->
                 Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(if (r.failure != null || r.errors.isNotEmpty()) Icons.Rounded.ErrorOutline else Icons.Rounded.CloudDone, null, Modifier.size(16.dp), tint = if (r.failure != null) Palette.Record else Color.White)
+                        Icon(if (r.failure != null || r.errors.isNotEmpty()) Icons.Rounded.ErrorOutline else Icons.Rounded.CloudDone, null, Modifier.size(16.dp), tint = if (r.failure != null) Palette.Record else Palette.White)
                         Spacer(Modifier.width(8.dp))
                         Text(formatDate(r.time), fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                         Text(r.trigger + if (r.duration > 0) " · ${r.duration / 1000} s" else "", fontSize = 11.sp, color = Palette.TextDim)

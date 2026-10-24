@@ -49,12 +49,12 @@ import pl.openfilepower.*
     var fontSize by remember { mutableFloatStateOf(13f) }
     val tryClose = { if (state.modified) confirmClose = true else close() }
     BackHandler(onBack = tryClose)
-    Column(Modifier.fillMaxSize().background(Color.Black).windowInsetsPadding(WindowInsets.safeDrawing).imePadding()) {
+    Column(Modifier.fillMaxSize().background(Palette.Panel).windowInsetsPadding(WindowInsets.safeDrawing).imePadding()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             RoundIcon(Icons.Rounded.Close, "Zamknij edytor", onClick = tryClose)
             Column(Modifier.weight(1f).padding(start = 4.dp)) {
                 Text(state.item.name, fontWeight = FontWeight.Bold, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text((if (state.modified) "● Niezapisane zmiany · " else "") + "${state.text.lines().size} wierszy · ${formatSize(state.text.toByteArray().size.toLong())}", fontSize = 11.sp, color = if (state.modified) Color.White else Palette.TextDim)
+                Text((if (state.modified) "● Niezapisane zmiany · " else "") + "${state.text.lines().size} wierszy · ${formatSize(state.text.toByteArray().size.toLong())}", fontSize = 11.sp, color = if (state.modified) Palette.White else Palette.TextDim)
             }
             RoundIcon(Icons.Rounded.TextDecrease, "Mniejsza czcionka", size = 38.dp, flat = true) { fontSize = (fontSize - 1).coerceAtLeast(9f) }
             RoundIcon(Icons.Rounded.TextIncrease, "Większa czcionka", size = 38.dp, flat = true) { fontSize = (fontSize + 1).coerceAtMost(24f) }
@@ -66,8 +66,8 @@ import pl.openfilepower.*
                 state.text, { vm.editor = state.copy(text = it) },
                 Modifier.then(if (wrap) Modifier.fillMaxWidth() else Modifier.widthIn(min = 400.dp)).padding(bottom = 80.dp),
                 readOnly = state.readOnly,
-                textStyle = TextStyle(color = Color.White, fontFamily = FontFamily.Monospace, fontSize = fontSize.sp, lineHeight = (fontSize * 1.45f).sp),
-                cursorBrush = SolidColor(Color.White),
+                textStyle = TextStyle(color = Palette.White, fontFamily = FontFamily.Monospace, fontSize = fontSize.sp, lineHeight = (fontSize * 1.45f).sp),
+                cursorBrush = SolidColor(Palette.White),
             )
         }
     }

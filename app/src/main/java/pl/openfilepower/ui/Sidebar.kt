@@ -100,7 +100,7 @@ import pl.openfilepower.*
     Row(Modifier.fillMaxWidth().clip(Pill).background(if (selected) Palette.White else Color.Transparent).then(click).padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
         Icon(icon, null, Modifier.size(19.dp), tint = if (selected) Palette.Ink else Palette.TextDim)
         Spacer(Modifier.width(12.dp))
-        Text(label, fontSize = 13.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium, color = if (selected) Palette.Ink else Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        Text(label, fontSize = 13.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium, color = if (selected) Palette.Ink else Palette.White, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
         if (badge) Box(Modifier.size(8.dp).clip(CircleShape).background(Palette.White))
     }
 }
@@ -126,9 +126,10 @@ import pl.openfilepower.*
                 root?.direct == true -> Icons.Rounded.Smartphone
                 else -> Icons.Rounded.FolderSpecial
             }
-            Icon(icon, null, Modifier.size(17.dp), tint = if (current) Palette.Ink else Palette.TextDim)
+            // Foldery w jednym, żółtym kolorze – tak jak na liście plików.
+            Icon(icon, null, Modifier.size(17.dp), tint = if (current) Palette.Ink else if (depth > 0) Palette.Folder else Palette.TextDim)
             Spacer(Modifier.width(9.dp))
-            Text(vm.title(p), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, color = if (current) Palette.Ink else Color.White, fontWeight = if (current) FontWeight.Bold else FontWeight.Normal)
+            Text(vm.title(p), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, color = if (current) Palette.Ink else Palette.White, fontWeight = if (current) FontWeight.Bold else FontWeight.Normal)
         }
     }
     if (expanded && depth < 12) vm.tree[p]?.forEach { TreeNode(vm, it.place, depth + 1, done) }
@@ -138,7 +139,7 @@ import pl.openfilepower.*
 @Composable private fun LongPressMenu(open: Boolean, dismiss: () -> Unit, actions: List<Pair<String, () -> Unit>>) {
     DropdownMenu(open, dismiss, containerColor = Palette.PanelHigh) {
         actions.forEach { (label, action) ->
-            DropdownMenuItem({ Text(label, fontSize = 14.sp, color = if (label == "Odłącz") Palette.Record else Color.White) }, { dismiss(); action() })
+            DropdownMenuItem({ Text(label, fontSize = 14.sp, color = if (label == "Odłącz") Palette.Record else Palette.White) }, { dismiss(); action() })
         }
     }
 }

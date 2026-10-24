@@ -26,6 +26,16 @@ data class Progress(val title: String, val text: String = "", val fraction: Floa
 enum class MediaFilter(val label: String) { ALL("Wszystko"), PHOTOS("Zdjęcia"), RAW("RAW"), VIDEOS("Wideo") }
 enum class TypeFilter(val label: String) { ALL("Wszystko"), FOLDERS("Foldery"), IMAGES("Zdjęcia"), VIDEO("Wideo"), AUDIO("Audio"), DOCUMENTS("Dokumenty"), ARCHIVES("Archiwa") }
 enum class GridSize(val label: String, val phone: Int, val tablet: Int) { SMALL("S", 88, 112), MEDIUM("M", 112, 150), LARGE("L", 150, 200) }
+
+// Granice ciągłej gęstości widoku plików (patrz ExplorerModel.density).
+const val DENSITY_MIN = 0.12f
+const val DENSITY_MAX = 3f
+/** Poniżej tej wartości lista gubi ikony i zostaje najgęstsza. */
+const val BARE_CEILING = 0.3f
+/** Od tej wartości widok jest siatką. */
+const val GRID_FLOOR = 1f
+const val LIST_ANCHOR = 0.6f
+const val GRID_ANCHOR = 1.6f
 data class Analysis(val place: Place, val entries: List<Pair<Item, Long>>, val done: Boolean) { val total get() = entries.sumOf { it.second } }
 enum class Sort(val label: String) { NAME("Nazwa"), SIZE("Rozmiar"), DATE("Data"), TYPE("Typ") }
 
@@ -73,7 +83,16 @@ class ExplorerModel(app: Application) : AndroidViewModel(app) {
     var trashEntries by mutableStateOf<List<TrashEntry>>(emptyList()); private set
 
     // Ustawienia widoku – zapamiętywane między uruchomieniami.
-    var grid by mutableStateOf(prefs.flag("grid", false)); private set
+    /**
+     * Ciągła gęstość widoku plików, wspólna dla listy i siatki – szczypanie przesuwa ją bez skoków:
+     * 0,12 = najgęstsza lista bez ikon, 0,30 = lista z ikonami, 1,0 = granica siatki, 3,0 = największe kafelki.
+     */
+    var density by mutableStateOf(prefs.text("density", "").toFloatOrNull() ?: if (prefs.flag("grid", false)) GRID_ANCHOR else LIST_ANCHOR); private set
+    private var lastList = prefs.text("densityList", "").toFloatOrNull() ?: LIST_ANCHOR
+    private var lastGrid = prefs.text("densityGrid", "").toFloatOrNull() ?: GRID_ANCHOR
+    val grid get() = density >= GRID_FLOOR
+    /** Lista bez ikon – ostatni krok szczypania w dół. */
+    val bare get() = density < BARE_CEILING
     var showHidden by mutableStateOf(prefs.flag("hidden", false)); private set
     var foldersFirst by mutableStateOf(prefs.flag("foldersFirst", true)); private set
     var descending by mutableStateOf(prefs.flag("descending", false)); private set
@@ -81,7 +100,7 @@ class ExplorerModel(app: Application) : AndroidViewModel(app) {
     var thumbnails by mutableStateOf(prefs.flag("thumbnails", true)); private set
     var sort by mutableStateOf(runCatching { Sort.valueOf(prefs.text("sort", Sort.NAME.name)) }.getOrDefault(Sort.NAME)); private set
     var autoUpdate by mutableStateOf(prefs.autoUpdate); private set
-    var compact by mutableStateOf(prefs.flag("compact", true)); private set
+    val compact get() = density < 0.7f
     var showFilters by mutableStateOf(prefs.flag("showFilters", false)); private set
     var gridSize by mutableStateOf(runCatching { GridSize.valueOf(prefs.text("gridSize", GridSize.MEDIUM.name)) }.getOrDefault(GridSize.MEDIUM)); private set
     var typeFilter by mutableStateOf(TypeFilter.ALL)
@@ -567,7 +586,14 @@ class ExplorerModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ——— Ustawienia ———
-    fun updateGrid(v: Boolean) { grid = v; prefs.setFlag("grid", v) }
+    fun updateGrid(v: Boolean) { density = (if (v) lastGrid else lastList).coerceIn(DENSITY_MIN, DENSITY_MAX); commitDensity() }
+    /** Szczypanie: mnoży gęstość współczynnikiem z gestu, bez zapisu w pamięci. */
+    fun pinchDensity(zoom: Float) { density = (density * zoom).coerceIn(DENSITY_MIN, DENSITY_MAX) }
+    /** Koniec gestu: zapamiętuje gęstość i kotwicę, do której wraca przycisk zmiany widoku. */
+    fun commitDensity() {
+        if (grid) lastGrid = density else lastList = density
+        prefs.setText("density", density.toString()); prefs.setText("densityList", lastList.toString()); prefs.setText("densityGrid", lastGrid.toString())
+    }
     fun updateHidden(v: Boolean) { showHidden = v; prefs.setFlag("hidden", v); tree.clear(); expanded.clear() }
     fun updateFoldersFirst(v: Boolean) { foldersFirst = v; prefs.setFlag("foldersFirst", v) }
     fun updateDescending(v: Boolean) { descending = v; prefs.setFlag("descending", v) }
@@ -669,7 +695,7 @@ class ExplorerModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ——— Kompaktowość ———
-    fun updateCompact(v: Boolean) { compact = v; prefs.setFlag("compact", v) }
+    fun updateCompact(v: Boolean) { density = if (v) 0.5f else 0.9f; commitDensity() }
     fun updateShowFilters(v: Boolean) { showFilters = v; prefs.setFlag("showFilters", v); if (!v) typeFilter = TypeFilter.ALL }
     fun updateGridSize(v: GridSize) { gridSize = v; prefs.setText("gridSize", v.name) }
     fun clearRecentPlaces() { recentPlaces = emptyList(); prefs.savePlaces("recentPlaces", emptyList()) }

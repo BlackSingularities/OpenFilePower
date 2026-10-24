@@ -5,12 +5,14 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import android.app.Activity
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
@@ -34,7 +36,10 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -49,29 +54,76 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.core.view.WindowCompat
+import pl.openfilepower.Preferences
 
-/** Czarno-biała paleta wspólna z OpenPDF: akcent = biel, czerwień dla usuwania. */
-object Palette {
-    val White = Color(0xFFFFFFFF)
-    val Ink = Color(0xFF000000)
-    val Panel = Color(0xFF000000)
-    val PanelHigh = Color(0xFF1C1C1C)
-    val Card = Color(0x0FFFFFFF)
-    val Record = Color(0xFFFF3B47)
-    val TextDim = Color(0xB3FFFFFF)
-    val TextFaint = Color(0x66FFFFFF)
-    val Line = Color(0x1FFFFFFF)
-}
-
-private val scheme = darkColorScheme(
-    primary = Palette.White, onPrimary = Palette.Ink, secondary = Color(0xFFE0E0E0), onSecondary = Palette.Ink,
-    background = Palette.Ink, onBackground = Color.White, surface = Palette.Panel, onSurface = Color.White,
-    surfaceVariant = Palette.PanelHigh, onSurfaceVariant = Palette.TextDim, surfaceContainerLow = Palette.Panel, surfaceContainer = Palette.PanelHigh,
-    surfaceContainerHigh = Palette.PanelHigh, surfaceContainerHighest = Palette.PanelHigh, outline = Color(0x33FFFFFF), error = Palette.Record,
+/**
+ * Zestaw kolorów jednego motywu. Nazwy są „z perspektywy ciemnego motywu”: [white] to kolor
+ * pierwszego planu (tekst, ikony, akcent), [ink] to jego przeciwieństwo – tło i tekst na akcencie.
+ * W jasnym motywie oba zamieniają się miejscami, więc cały interfejs odwraca się bez zmian w kodzie.
+ */
+class Scheme(
+    val white: Color, val ink: Color, val panel: Color, val panelHigh: Color, val card: Color,
+    val textDim: Color, val textFaint: Color, val line: Color, val folder: Color, val record: Color, val dark: Boolean,
 )
 
-@Composable fun AppTheme(content: @Composable () -> Unit) = MaterialTheme(colorScheme = scheme, typography = Typography()) {
-    CompositionLocalProvider(LocalContentColor provides Color.White, content = content)
+private val DarkScheme = Scheme(
+    white = Color(0xFFFFFFFF), ink = Color(0xFF000000), panel = Color(0xFF000000), panelHigh = Color(0xFF1C1C1C), card = Color(0x0FFFFFFF),
+    textDim = Color(0xB3FFFFFF), textFaint = Color(0x66FFFFFF), line = Color(0x1FFFFFFF), folder = Color(0xFFFFC94A), record = Color(0xFFFF3B47), dark = true,
+)
+private val LightScheme = Scheme(
+    white = Color(0xFF101010), ink = Color(0xFFFFFFFF), panel = Color(0xFFFFFFFF), panelHigh = Color(0xFFEFEFEF), card = Color(0x0D000000),
+    textDim = Color(0x99000000), textFaint = Color(0x61000000), line = Color(0x1F000000), folder = Color(0xFFE39B00), record = Color(0xFFD32030), dark = false,
+)
+
+/** Czarno-biała paleta wspólna z OpenPDF: akcent = pierwszy plan, czerwień dla usuwania. */
+object Palette {
+    internal var scheme by mutableStateOf(DarkScheme)
+    val White get() = scheme.white
+    val Ink get() = scheme.ink
+    val Panel get() = scheme.panel
+    val PanelHigh get() = scheme.panelHigh
+    val Card get() = scheme.card
+    val Record get() = scheme.record
+    val TextDim get() = scheme.textDim
+    val TextFaint get() = scheme.textFaint
+    val Line get() = scheme.line
+    val Folder get() = scheme.folder
+    val dark get() = scheme.dark
+}
+
+enum class ThemeMode(val label: String) { AUTO("Auto"), LIGHT("Jasny"), DARK("Ciemny") }
+
+/** Wybrany motyw: trzymany poza modelem, bo [AppTheme] opakowuje cały ekran. */
+object Theme {
+    var mode by mutableStateOf(ThemeMode.AUTO)
+    fun load(context: android.content.Context) {
+        mode = runCatching { ThemeMode.valueOf(Preferences(context).text("theme", ThemeMode.AUTO.name)) }.getOrDefault(ThemeMode.AUTO)
+    }
+}
+
+private fun colors(s: Scheme) = (if (s.dark) darkColorScheme() else lightColorScheme()).copy(
+    primary = s.white, onPrimary = s.ink, secondary = s.white.copy(alpha = 0.85f), onSecondary = s.ink,
+    background = s.panel, onBackground = s.white, surface = s.panel, onSurface = s.white,
+    surfaceVariant = s.panelHigh, onSurfaceVariant = s.textDim, surfaceContainerLow = s.panel, surfaceContainer = s.panelHigh,
+    surfaceContainerHigh = s.panelHigh, surfaceContainerHighest = s.panelHigh, outline = s.white.copy(alpha = 0.2f), error = s.record,
+)
+
+@Composable fun AppTheme(content: @Composable () -> Unit) {
+    val context = LocalContext.current
+    remember { Theme.load(context) }
+    val dark = when (Theme.mode) { ThemeMode.AUTO -> isSystemInDarkTheme(); ThemeMode.DARK -> true; ThemeMode.LIGHT -> false }
+    val active = if (dark) DarkScheme else LightScheme
+    Palette.scheme = active
+    val view = LocalView.current
+    SideEffect {
+        val window = (view.context as? Activity)?.window ?: return@SideEffect
+        window.decorView.setBackgroundColor(active.panel.toArgb())
+        WindowCompat.getInsetsController(window, view).apply { isAppearanceLightStatusBars = !dark; isAppearanceLightNavigationBars = !dark }
+    }
+    MaterialTheme(colorScheme = colors(active), typography = Typography()) {
+        CompositionLocalProvider(LocalContentColor provides active.white, content = content)
+    }
 }
 
 val Pill = RoundedCornerShape(50)
@@ -94,15 +146,15 @@ val Pill = RoundedCornerShape(50)
 @Composable fun RoundIcon(icon: ImageVector, label: String, modifier: Modifier = Modifier, active: Boolean = false, enabled: Boolean = true, badge: String? = null, size: Dp = 44.dp, flat: Boolean = false, tint: Color? = null, onLongClick: (() -> Unit)? = null, onClick: () -> Unit) {
     val bg by animateColorAsState(if (active) Palette.White else if (flat) Color.Transparent else Palette.PanelHigh, tween(160), label = "bg")
     Box(modifier.pressable(label, enabled, onLongClick, onClick).size(size).clip(CircleShape).background(bg), contentAlignment = Alignment.Center) {
-        Icon(icon, null, tint = tint ?: if (active) Palette.Ink else Color.White, modifier = Modifier.size(size * 0.5f))
+        Icon(icon, null, tint = tint ?: if (active) Palette.Ink else Palette.White, modifier = Modifier.size(size * 0.5f))
         if (badge != null) Text(badge, color = Palette.Ink, fontSize = 9.sp, fontWeight = FontWeight.Black, modifier = Modifier.align(Alignment.TopEnd).padding(top = 4.dp, end = 4.dp).background(Palette.White, Pill).padding(horizontal = 4.dp))
     }
 }
 
 /** Przycisk-pigułka: biały (główny), półprzezroczysty albo czerwony (niebezpieczny). */
 @Composable fun PillButton(text: String, modifier: Modifier = Modifier, primary: Boolean = true, danger: Boolean = false, enabled: Boolean = true, icon: ImageVector? = null, onClick: () -> Unit) {
-    val bg = when { !enabled -> Color.White.copy(alpha = 0.08f); danger -> Palette.Record; primary -> Palette.White; else -> Color.White.copy(alpha = 0.1f) }
-    val fg = when { !enabled -> Palette.TextFaint; danger -> Color.White; primary -> Palette.Ink; else -> Color.White }
+    val bg = when { !enabled -> Palette.White.copy(alpha = 0.08f); danger -> Palette.Record; primary -> Palette.White; else -> Palette.White.copy(alpha = 0.1f) }
+    val fg = when { !enabled -> Palette.TextFaint; danger -> Color.White; primary -> Palette.Ink; else -> Palette.White }
     Row(modifier.pressable(text, enabled, onClick = onClick).clip(Pill).background(bg).padding(horizontal = if (icon != null) 14.dp else 18.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
         if (icon != null) { Icon(icon, null, tint = fg, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)) }
         Text(text, color = fg, fontWeight = FontWeight.Bold, fontSize = 14.sp, maxLines = 1)
@@ -138,7 +190,7 @@ val Pill = RoundedCornerShape(50)
     Row(Modifier.fillMaxWidth().clickable(enabled = enabled, onClick = onClick).padding(horizontal = 10.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         RowIcon(icon, if (danger) Palette.Record else Palette.White)
         Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
-            Text(title, fontSize = 14.sp, color = when { !enabled -> Palette.TextFaint; danger -> Palette.Record; else -> Color.White }, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(title, fontSize = 14.sp, color = when { !enabled -> Palette.TextFaint; danger -> Palette.Record; else -> Palette.White }, maxLines = 2, overflow = TextOverflow.Ellipsis)
             if (subtitle != null) Text(subtitle, fontSize = 11.sp, color = Palette.TextDim, lineHeight = 14.sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
         }
         trailing?.invoke()
@@ -149,7 +201,7 @@ val Pill = RoundedCornerShape(50)
     Row(Modifier.fillMaxWidth().clickable(enabled = enabled) { onChange(!value) }.padding(horizontal = 10.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         RowIcon(icon)
         Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
-            Text(title, fontSize = 14.sp, color = if (enabled) Color.White else Palette.TextFaint)
+            Text(title, fontSize = 14.sp, color = if (enabled) Palette.White else Palette.TextFaint)
             if (subtitle != null) Text(subtitle, fontSize = 11.sp, color = Palette.TextDim, lineHeight = 14.sp)
         }
         Switch(value, onChange, enabled = enabled, modifier = Modifier.scale(0.82f), colors = SwitchDefaults.colors(checkedTrackColor = Palette.White, checkedThumbColor = Palette.Ink))
@@ -161,7 +213,7 @@ val Pill = RoundedCornerShape(50)
         RowIcon(icon)
         Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
             Text(title, fontSize = 11.sp, color = Palette.TextDim)
-            Text(value.ifBlank { "—" }, fontSize = 13.sp, color = Color.White)
+            Text(value.ifBlank { "—" }, fontSize = 13.sp, color = Palette.White)
         }
     }
 }
@@ -177,7 +229,7 @@ val Pill = RoundedCornerShape(50)
         Row(Modifier.clip(Pill).background(Palette.Card).padding(2.dp)) {
             options.forEach { o ->
                 val sel = o == selected
-                Box(Modifier.clip(Pill).background(if (sel) Color.White else Color.Transparent).selectable(selected = sel, role = Role.RadioButton, onClick = { onSelect(o) }).padding(horizontal = 10.dp, vertical = 6.dp), contentAlignment = Alignment.Center) {
+                Box(Modifier.clip(Pill).background(if (sel) Palette.White else Color.Transparent).selectable(selected = sel, role = Role.RadioButton, onClick = { onSelect(o) }).padding(horizontal = 10.dp, vertical = 6.dp), contentAlignment = Alignment.Center) {
                     if (icon != null) Icon(icon(o), label(o), tint = if (sel) Palette.Ink else Palette.TextDim, modifier = Modifier.size(16.dp))
                     else Text(label(o), fontSize = 11.sp, fontWeight = if (sel) FontWeight.Bold else FontWeight.Medium, color = if (sel) Palette.Ink else Palette.TextDim)
                 }
@@ -196,9 +248,9 @@ val Pill = RoundedCornerShape(50)
 }
 
 @Composable fun Chip(text: String, selected: Boolean, modifier: Modifier = Modifier, icon: ImageVector? = null, onClick: () -> Unit) {
-    Row(modifier.clip(Pill).background(if (selected) Palette.White else Color.White.copy(alpha = 0.08f)).clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
-        if (icon != null) { Icon(icon, null, tint = if (selected) Palette.Ink else Color.White, modifier = Modifier.size(15.dp)); Spacer(Modifier.width(5.dp)) }
-        Text(text, color = if (selected) Palette.Ink else Color.White, fontSize = 12.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium, maxLines = 1)
+    Row(modifier.clip(Pill).background(if (selected) Palette.White else Palette.White.copy(alpha = 0.08f)).clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (icon != null) { Icon(icon, null, tint = if (selected) Palette.Ink else Palette.White, modifier = Modifier.size(15.dp)); Spacer(Modifier.width(5.dp)) }
+        Text(text, color = if (selected) Palette.Ink else Palette.White, fontSize = 12.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium, maxLines = 1)
     }
 }
 
@@ -206,7 +258,7 @@ val Pill = RoundedCornerShape(50)
 @Composable fun DarkDialog(title: String, onDismiss: () -> Unit, buttons: @Composable RowScope.() -> Unit, content: @Composable ColumnScope.() -> Unit) {
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Column(Modifier.padding(20.dp).widthIn(max = 520.dp).fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(Palette.PanelHigh).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(title, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            Text(title, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Palette.White)
             Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp), content = content)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End), verticalAlignment = Alignment.CenterVertically, content = buttons)
         }
@@ -221,7 +273,7 @@ val Pill = RoundedCornerShape(50)
         keyboardOptions = KeyboardOptions(keyboardType = if (password) KeyboardType.Password else KeyboardType.Text, imeAction = if (onDone != null) ImeAction.Done else ImeAction.Default),
         keyboardActions = KeyboardActions(onDone = { onDone?.invoke() }),
         modifier = modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp),
-        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Color.White, unfocusedBorderColor = Color.White.copy(alpha = 0.25f), focusedLabelColor = Color.White, unfocusedLabelColor = Palette.TextDim, cursorColor = Color.White, focusedTextColor = Color.White, unfocusedTextColor = Color.White),
+        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Palette.White, unfocusedBorderColor = Palette.White.copy(alpha = 0.25f), focusedLabelColor = Palette.White, unfocusedLabelColor = Palette.TextDim, cursorColor = Palette.White, focusedTextColor = Palette.White, unfocusedTextColor = Palette.White),
     )
 }
 
@@ -232,7 +284,7 @@ val Pill = RoundedCornerShape(50)
 @Composable fun Panel(title: String, onClose: () -> Unit, actions: @Composable RowScope.() -> Unit = {}, scrollable: Boolean = true, content: @Composable ColumnScope.() -> Unit) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val wide = maxWidth >= 720.dp
-        Box(Modifier.fillMaxSize().background(if (wide) Color.Black.copy(alpha = 0.35f) else Color.Transparent).pointerInput(Unit) { detectTapGestures { onClose() } })
+        Box(Modifier.fillMaxSize().background(if (wide) Color.Black.copy(alpha = if (Palette.dark) 0.35f else 0.18f) else Color.Transparent).pointerInput(Unit) { detectTapGestures { onClose() } })
         Column(
             Modifier.then(if (wide) Modifier.align(Alignment.CenterEnd).width(420.dp).fillMaxHeight() else Modifier.fillMaxSize())
                 .background(Palette.Panel).pointerInput(Unit) { detectTapGestures { } }
@@ -251,7 +303,7 @@ val Pill = RoundedCornerShape(50)
 
 /** Pasek postępu w stylu aplikacji. */
 @Composable fun Meter(fraction: Float, modifier: Modifier = Modifier, danger: Boolean = false) {
-    Box(modifier.height(6.dp).clip(Pill).background(Color.White.copy(alpha = 0.12f))) {
+    Box(modifier.height(6.dp).clip(Pill).background(Palette.White.copy(alpha = 0.12f))) {
         Box(Modifier.fillMaxHeight().fillMaxWidth(fraction.coerceIn(0f, 1f)).clip(Pill).background(if (danger) Palette.Record else Palette.White))
     }
 }

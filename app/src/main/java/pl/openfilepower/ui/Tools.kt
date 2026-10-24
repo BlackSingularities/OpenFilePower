@@ -121,7 +121,7 @@ enum class RenameMode(val label: String) { PATTERN("Wzorzec"), REPLACE("Zamień"
             result.take(12).forEach { (item, name) ->
                 Column(Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) {
                     Text(item.name, fontSize = 11.sp, color = Palette.TextFaint, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(name, fontSize = 13.sp, color = if (runCatching { FileRules.validateName(name) }.isSuccess) Color.White else Palette.Record, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(name, fontSize = 13.sp, color = if (runCatching { FileRules.validateName(name) }.isSuccess) Palette.White else Palette.Record, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
             if (result.size > 12) Text("… i ${result.size - 12} więcej", fontSize = 11.sp, color = Palette.TextDim, modifier = Modifier.padding(12.dp))

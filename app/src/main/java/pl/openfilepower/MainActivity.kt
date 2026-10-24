@@ -14,7 +14,8 @@ import pl.openfilepower.ui.AppTheme
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge(statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT), navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT))
+        // Jasność ikon pasków systemowych ustawia AppTheme, zgodnie z wybranym motywem.
+        enableEdgeToEdge(statusBarStyle = SystemBarStyle.auto(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT), navigationBarStyle = SystemBarStyle.auto(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT))
         // Powiadomienie o postępie kopiowania w tle – pytamy raz, przy pierwszym uruchomieniu.
         val prefs = Preferences(this)
         if (Build.VERSION.SDK_INT >= 33 && !prefs.flag("askedNotifications", false) && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {

@@ -67,7 +67,7 @@ import pl.openfilepower.*
         }
         Spacer(Modifier.height(12.dp))
         Group(null) {
-            if (details.loading) LinearProgressIndicator(Modifier.fillMaxWidth().padding(12.dp), color = Palette.White, trackColor = Color.White.copy(alpha = 0.12f))
+            if (details.loading) LinearProgressIndicator(Modifier.fillMaxWidth().padding(12.dp), color = Palette.White, trackColor = Palette.White.copy(alpha = 0.12f))
             details.values.forEach { (key, value) ->
                 Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 7.dp)) {
                     Text(key.uppercase(), color = Palette.TextDim, fontSize = 9.sp, letterSpacing = 1.sp, fontWeight = FontWeight.Bold)
@@ -93,7 +93,7 @@ import pl.openfilepower.*
 }
 
 @Composable fun Inspector(vm: ExplorerModel, modifier: Modifier) {
-    Column(modifier.background(Color(0xFF0B0B0B)).padding(horizontal = 16.dp).verticalScroll(rememberScrollState())) {
+    Column(modifier.background(Palette.PanelHigh).padding(horizontal = 16.dp).verticalScroll(rememberScrollState())) {
         SectionTitle("Właściwości", Modifier.padding(top = 12.dp))
         InspectorContent(vm)
     }
@@ -104,13 +104,14 @@ import pl.openfilepower.*
     val context = LocalContext.current
     Panel("Ustawienia", close) {
         Group("Widok") {
+            CompactChoice(Icons.Rounded.Contrast, "Motyw", ThemeMode.entries, Theme.mode, { it.label }) { Theme.mode = it; Preferences(context).setText("theme", it.name) }
             CompactChoice(Icons.Rounded.GridView, "Układ", listOf(false, true), vm.grid, { if (it) "Siatka" else "Lista" }, icon = { if (it) Icons.Rounded.GridView else Icons.AutoMirrored.Rounded.ViewList }) { vm.updateGrid(it) }
             SwitchRow(Icons.Rounded.Visibility, "Ukryte pliki", "Pokazuj pliki i foldery zaczynające się od kropki", vm.showHidden) { vm.updateHidden(it) }
             SwitchRow(Icons.Rounded.Folder, "Foldery na początku", null, vm.foldersFirst) { vm.updateFoldersFirst(it) }
             SwitchRow(Icons.Rounded.Image, "Miniatury", "Podgląd zdjęć, RAW-ów i filmów na liście", vm.thumbnails) { vm.updateThumbnails(it) }
-            SwitchRow(Icons.Rounded.Compress, "Widok kompaktowy", "Niższe wiersze – więcej plików na ekranie", vm.compact) { vm.updateCompact(it) }
+            SwitchRow(Icons.Rounded.Compress, "Widok kompaktowy", "Niższe wiersze – więcej plików na ekranie; to samo robi szczypanie dwoma palcami", vm.compact) { vm.updateCompact(it) }
             SwitchRow(Icons.Rounded.FilterList, "Filtry typów", "Pasek Wszystko · Foldery · Zdjęcia · Wideo… nad listą plików i w galerii", vm.showFilters) { vm.updateShowFilters(it) }
-            CompactChoice(Icons.Rounded.PhotoSizeSelectLarge, "Rozmiar siatki i galerii", GridSize.entries, vm.gridSize, { it.label }) { vm.updateGridSize(it) }
+            CompactChoice(Icons.Rounded.PhotoSizeSelectLarge, "Rozmiar miniatur galerii", GridSize.entries, vm.gridSize, { it.label }) { vm.updateGridSize(it) }
         }
         Group("Zdjęcia i sesja") {
             SwitchRow(Icons.Rounded.CalendarMonth, "Galeria według miesięcy", "Grupuj oś czasu po miesiącach zamiast po dniach", vm.galleryByMonth) { vm.updateGalleryByMonth(it) }
@@ -169,7 +170,7 @@ import pl.openfilepower.*
         androidx.compose.material3.OutlinedTextField(
             value, { value = it }, Modifier.fillMaxWidth().focusRequester(focus), singleLine = true, label = { Text("Nazwa") }, isError = value.text.isNotEmpty() && !valid,
             shape = RoundedCornerShape(14.dp),
-            colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(focusedBorderColor = Color.White, unfocusedBorderColor = Color.White.copy(alpha = 0.25f), focusedLabelColor = Color.White, cursorColor = Color.White),
+            colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(focusedBorderColor = Palette.White, unfocusedBorderColor = Palette.White.copy(alpha = 0.25f), focusedLabelColor = Palette.White, cursorColor = Palette.White),
             keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { if (valid) submit(value.text) }),
             keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done),
         )

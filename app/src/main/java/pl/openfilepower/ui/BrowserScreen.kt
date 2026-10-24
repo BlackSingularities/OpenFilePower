@@ -1,11 +1,16 @@
 package pl.openfilepower.ui
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -35,8 +40,14 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.PointerEvent
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.unit.lerp
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
@@ -90,11 +101,18 @@ class BrowserActions(
                         when { vm.searchResults != null || vm.query.isNotEmpty() -> "Spróbuj innej nazwy lub użyj * jako dowolnego ciągu."; category != null -> "Pliki pojawią się, gdy system je zindeksuje."; else -> "Utwórz folder przyciskiem + lub wklej pliki ze schowka." },
                         Modifier.align(Alignment.Center),
                     )
-                    vm.grid -> LazyVerticalGrid(state = gridState, modifier = Modifier.dragSelect(vm, gridState, { items }), columns = GridCells.Adaptive((if (medium) vm.gridSize.tablet else vm.gridSize.phone).dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(bottom = 160.dp)) {
-                        items(items, key = { it.place.toString() }) { FileTile(it, vm, actions.inspect) }
-                    }
-                    else -> LazyColumn(state = listState, modifier = Modifier.dragSelect(vm, listState, { items }), contentPadding = PaddingValues(bottom = 160.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        items(items, key = { it.place.toString() }) { FileRow(it, vm, wide, showPath, actions.inspect) }
+                    else -> {
+                        // Szczypanie przesuwa jedną, ciągłą gęstość: od listy bez ikon aż do dużych kafelków.
+                        val density = vm.density
+                        val cell = lerp(if (medium) 108.dp else 86.dp, if (medium) 300.dp else 220.dp, ((density - GRID_FLOOR) / (DENSITY_MAX - GRID_FLOOR)).coerceIn(0f, 1f))
+                        Crossfade(density >= GRID_FLOOR, animationSpec = tween(220), label = "układ", modifier = Modifier.pinchDensity(vm)) { asGrid ->
+                            if (asGrid) LazyVerticalGrid(state = gridState, modifier = Modifier.dragSelect(vm, gridState, { items }), columns = GridCells.Adaptive(cell), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(6.dp), contentPadding = PaddingValues(bottom = 160.dp)) {
+                                items(items, key = { it.place.toString() }) { FileTile(it, vm, cell, actions.inspect) }
+                            }
+                            else LazyColumn(state = listState, modifier = Modifier.dragSelect(vm, listState, { items }), contentPadding = PaddingValues(bottom = 160.dp), verticalArrangement = Arrangement.spacedBy(if (vm.bare) 0.dp else 2.dp)) {
+                                items(items, key = { it.place.toString() }) { FileRow(it, vm, wide, showPath, density, actions.inspect) }
+                            }
+                        }
                     }
                 }
             }
@@ -109,6 +127,38 @@ class BrowserActions(
 }
 
 /** Górny pasek w jednej linii: menu źródeł, wstecz, karty i „więcej”. Nazwa folderu jest w linii informacji. */
+/**
+ * Szczypanie dwoma palcami zmienia gęstość widoku plików w locie – jak w Poweramp:
+ * rozsuwanie powiększa kafelki, zsuwanie zagęszcza listę aż do wariantu bez ikon.
+ * Zdarzenia są przechwytywane na przebiegu Initial i tylko przy dwóch palcach,
+ * więc zwykłe przewijanie jednym palcem działa bez zmian.
+ */
+@Composable private fun Modifier.pinchDensity(vm: ExplorerModel): Modifier {
+    val haptic = LocalHapticFeedback.current
+    return this.pointerInput(Unit) {
+        awaitEachGesture {
+            awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+            var zooming = false
+            var crossed = vm.grid
+            var event: PointerEvent
+            do {
+                event = awaitPointerEvent(PointerEventPass.Initial)
+                if (event.changes.count { it.pressed } >= 2) {
+                    val zoom = event.calculateZoom()
+                    if (zoom != 1f) {
+                        zooming = true
+                        vm.pinchDensity(zoom)
+                        // Krótkie drgnienie dokładnie na przejściu lista ↔ siatka.
+                        if (vm.grid != crossed) { crossed = vm.grid; haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove) }
+                    }
+                    if (zooming) event.changes.forEach { it.consume() }
+                }
+            } while (event.changes.any { it.pressed })
+            if (zooming) vm.commitDensity()
+        }
+    }
+}
+
 @Composable private fun TopBar(vm: ExplorerModel, medium: Boolean, category: Category?, actions: BrowserActions) {
     Row(Modifier.fillMaxWidth().height(60.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         if (!medium) RoundIcon(Icons.Rounded.Menu, "Źródła i foldery", size = 40.dp, onClick = actions.menu)
@@ -162,7 +212,7 @@ class BrowserActions(
             Spacer(Modifier.width(10.dp))
             Box(Modifier.weight(1f).padding(vertical = 10.dp)) {
                 if (vm.query.isEmpty()) Text(if (recursive) "Filtruj folder lub szukaj w podfolderach…" else "Filtruj…", color = Palette.TextFaint, fontSize = 14.sp)
-                BasicTextField(vm.query, { vm.query = it }, Modifier.fillMaxWidth().focusRequester(focus), singleLine = true, textStyle = TextStyle(color = Color.White, fontSize = 14.sp), cursorBrush = SolidColor(Color.White),
+                BasicTextField(vm.query, { vm.query = it }, Modifier.fillMaxWidth().focusRequester(focus), singleLine = true, textStyle = TextStyle(color = Palette.White, fontSize = 14.sp), cursorBrush = SolidColor(Palette.White),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search), keyboardActions = KeyboardActions(onSearch = { if (recursive) vm.search(vm.query) }))
             }
             if (vm.query.isNotEmpty()) Icon(Icons.Rounded.Close, "Wyczyść", tint = Palette.TextDim, modifier = Modifier.size(32.dp).clip(CircleShape).clickable { vm.query = ""; if (vm.searchResults != null) vm.back() }.padding(6.dp))
@@ -196,7 +246,7 @@ class BrowserActions(
         Icon(if (network) Icons.Rounded.Lan else if (place.parts.isEmpty()) Icons.Rounded.PhoneAndroid else Icons.Rounded.Folder, null, tint = fg, modifier = Modifier.size(16.dp))
         Spacer(Modifier.width(7.dp))
         Column(Modifier.widthIn(max = if (active) 120.dp else 84.dp)) {
-            Text(vm.title(place), maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 13.sp, lineHeight = 15.sp, fontWeight = if (active) FontWeight.Bold else FontWeight.Medium, color = if (active) Palette.Ink else Color.White)
+            Text(vm.title(place), maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 13.sp, lineHeight = 15.sp, fontWeight = if (active) FontWeight.Bold else FontWeight.Medium, color = if (active) Palette.Ink else Palette.White)
             if (active) Text(
                 if (place.parts.isEmpty()) (if (network) "NAS" else "Katalog główny") else vm.title(place.copy(parts = place.parts.dropLast(1))),
                 maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 10.sp, lineHeight = 11.sp, color = Palette.Ink.copy(alpha = 0.55f),
@@ -215,7 +265,7 @@ class BrowserActions(
         (0 until p.parts.size).forEach { depth ->
             val crumb = p.copy(parts = p.parts.take(depth))
             val last = depth == p.parts.size - 1
-            Text(vm.title(crumb), maxLines = 1, fontSize = 12.sp, fontWeight = if (last) FontWeight.Bold else FontWeight.Medium, color = if (last) Color.White else Palette.TextDim,
+            Text(vm.title(crumb), maxLines = 1, fontSize = 12.sp, fontWeight = if (last) FontWeight.Bold else FontWeight.Medium, color = if (last) Palette.White else Palette.TextDim,
                 modifier = Modifier.dropFolder(vm, crumb).clip(Pill).clickable { vm.navigate(crumb) }.padding(horizontal = 8.dp, vertical = 6.dp))
             if (!last) Icon(Icons.Rounded.ChevronRight, null, Modifier.size(14.dp), tint = Palette.TextFaint)
         }
@@ -260,7 +310,7 @@ class BrowserActions(
         Box(Modifier.size(8.dp).clip(CircleShape).background(Palette.Record))
         Spacer(Modifier.width(8.dp))
         Text("Na żywo · nowych: ${vm.liveNew}", color = Palette.Ink, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-        Text("Stop", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.clip(Pill).background(Palette.Ink).clickable { vm.toggleLive() }.padding(horizontal = 12.dp, vertical = 6.dp))
+        Text("Stop", color = Palette.White, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.clip(Pill).background(Palette.Ink).clickable { vm.toggleLive() }.padding(horizontal = 12.dp, vertical = 6.dp))
     }
 }
 
@@ -295,7 +345,7 @@ class BrowserActions(
         }
         Spacer(Modifier.height(10.dp))
         if (p.fraction != null) Meter(p.fraction, Modifier.fillMaxWidth())
-        else LinearProgressIndicator(Modifier.fillMaxWidth().height(6.dp).clip(Pill), color = Palette.White, trackColor = Color.White.copy(alpha = 0.12f))
+        else LinearProgressIndicator(Modifier.fillMaxWidth().height(6.dp).clip(Pill), color = Palette.White, trackColor = Palette.White.copy(alpha = 0.12f))
     }
 }
 
@@ -357,8 +407,8 @@ class BrowserActions(
 }
 @Composable fun MenuRow(icon: ImageVector?, text: String, danger: Boolean = false, onClick: () -> Unit) {
     DropdownMenuItem(
-        text = { Text(text, fontSize = 14.sp, color = if (danger) Palette.Record else Color.White) },
-        leadingIcon = { if (icon != null) Icon(icon, null, tint = if (danger) Palette.Record else Color.White, modifier = Modifier.size(20.dp)) else Spacer(Modifier.size(20.dp)) },
+        text = { Text(text, fontSize = 14.sp, color = if (danger) Palette.Record else Palette.White) },
+        leadingIcon = { if (icon != null) Icon(icon, null, tint = if (danger) Palette.Record else Palette.White, modifier = Modifier.size(20.dp)) else Spacer(Modifier.size(20.dp)) },
         onClick = onClick,
     )
 }
