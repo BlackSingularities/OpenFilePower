@@ -5,6 +5,11 @@
 
 # Zmiany
 
+## 1.0.2
+
+- Pobieranie plików z NAS (otwieranie i udostępnianie) można anulować; widać postęp, rozmiar i prędkość, a przerwane pobieranie nie zostawia niepełnego pliku.
+- Przytrzymanie ikony lub miniatury pliku znowu zaznacza element (wcześniej zaznaczenie przełączało się dwa razy).
+
 ## 1.0.1
 
 - Ścieżka pod kartami wyśrodkowana, z bieżącym folderem pogrubionym na końcu.
