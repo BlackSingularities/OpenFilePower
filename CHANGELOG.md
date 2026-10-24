@@ -5,6 +5,15 @@
 
 # Zmiany
 
+## 1.0.1
+
+- Ścieżka pod kartami wyśrodkowana, z bieżącym folderem pogrubionym na końcu.
+- Liczba elementów i rozmiar w prawym dolnym rogu.
+- Ciaśniejszy interfejs: niższe paski, mniejsze odstępy.
+- Na tablecie pasek boczny można schować; wersja przy nazwie aplikacji.
+- Synchronizacja: otwieranie folderu pary na telefonie i na dysku, także obu naraz.
+- Usunięty tryb na żywo.
+
 ## 1.0.0
 
 - Pierwsze stabilne wydanie. Od teraz wersje numerowane semantycznie (X.Y.Z), wydanie powstaje z tagu.
