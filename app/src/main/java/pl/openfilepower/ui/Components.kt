@@ -111,7 +111,7 @@ private fun colors(s: Scheme) = (if (s.dark) darkColorScheme() else lightColorSc
 
 @Composable fun AppTheme(content: @Composable () -> Unit) {
     val context = LocalContext.current
-    remember { Theme.load(context) }
+    remember { Theme.load(context); true }
     val dark = when (Theme.mode) { ThemeMode.AUTO -> isSystemInDarkTheme(); ThemeMode.DARK -> true; ThemeMode.LIGHT -> false }
     val active = if (dark) DarkScheme else LightScheme
     Palette.scheme = active

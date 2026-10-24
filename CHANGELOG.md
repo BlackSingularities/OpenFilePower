@@ -5,6 +5,12 @@
 
 # Zmiany
 
+## 1.0.0
+
+- Pierwsze stabilne wydanie. Od teraz wersje numerowane semantycznie (X.Y.Z), wydanie powstaje z tagu.
+- Płynna gęstość widoku plików szczypaniem – od zwartej listy bez ikon po duże kafelki.
+- Tło okna zgodne z motywem jasnym i ciemnym.
+
 ## 0.4.0
 
 - **Synchronizacja folderów** telefonu z NAS, kartą SD, USB lub innym folderem: dwukierunkowa albo jednokierunkowa (kopia zapasowa).

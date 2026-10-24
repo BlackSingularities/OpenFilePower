@@ -2,6 +2,7 @@ name: Android
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
   workflow_dispatch:
 permissions:
@@ -34,10 +35,10 @@ jobs:
             app/build/outputs/apk/debug/*.apk
             app/build/reports/
 
-  # Każdy push na main = nowe wydanie. Wersja z pliku VERSION; gdy tag już istnieje,
-  # dostaje numer kompilacji (np. 0.2.0.57). versionCode rośnie z każdym przebiegiem.
+  # Wydanie tylko po wypchnięciu tagu vX.Y.Z (np. git tag v1.0.1 && git push origin v1.0.1).
+  # Tag musi zgadzać się z plikiem VERSION. versionCode rośnie z każdym przebiegiem.
   release:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && !contains(github.event.head_commit.message, '[skip release]')
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     needs: build
     runs-on: ubuntu-latest
     permissions:
@@ -58,10 +59,10 @@ jobs:
       - name: Wersja
         id: ver
         run: |
+          NAME="${GITHUB_REF_NAME#v}"
           BASE=$(tr -d '[:space:]' < VERSION)
-          NAME="$BASE"
-          if git rev-parse -q --verify "refs/tags/v$BASE" >/dev/null; then NAME="$BASE.${{ github.run_number }}"; fi
-          echo "base=$BASE" >> "$GITHUB_OUTPUT"
+          if ! echo "$NAME" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then echo "::error::Tag $GITHUB_REF_NAME nie ma postaci vX.Y.Z"; exit 1; fi
+          if [ "$NAME" != "$BASE" ]; then echo "::error::Tag $GITHUB_REF_NAME nie zgadza się z plikiem VERSION ($BASE)"; exit 1; fi
           echo "name=$NAME" >> "$GITHUB_OUTPUT"
           echo "code=$(( ${{ github.run_number }} + 100 ))" >> "$GITHUB_OUTPUT"
       - name: Klucz podpisu

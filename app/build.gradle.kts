@@ -6,7 +6,7 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
-// Wersja: plik VERSION (np. 0.2.0); CI podaje -PversionName/-PversionCode dla każdego wydania.
+// Wersja: plik VERSION (np. 1.0.0); wydanie z tagu vX.Y.Z, CI podaje -PversionName/-PversionCode.
 val baseVersion = rootProject.file("VERSION").readText().trim()
 val appVersionName = (project.findProperty("versionName") as String?) ?: baseVersion
 val appVersionCode = (project.findProperty("versionCode") as String?)?.toIntOrNull() ?: 1
