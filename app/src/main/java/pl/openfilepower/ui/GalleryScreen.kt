@@ -55,7 +55,7 @@ import java.util.Locale
                     Text("Zaznaczono ${vm.selected.size}", fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f).padding(start = 4.dp))
                     RoundIcon(Icons.Rounded.SelectAll, "Zaznacz wszystko") { vm.selectAll() }
                 } else {
-                    if (!medium) RoundIcon(Icons.Rounded.Menu, "Źródła i foldery", onClick = actions.menu)
+                    if (!medium || vm.sidebarHidden) RoundIcon(Icons.Rounded.Menu, "Źródła i foldery", onClick = actions.menu)
                     RoundIcon(Icons.AutoMirrored.Rounded.ArrowBack, "Wstecz") { vm.back() }
                     Column(Modifier.weight(1f).padding(start = 4.dp)) {
                         Text(vm.galleryAlbum?.let(vm::title) ?: "Galeria", fontSize = 18.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)

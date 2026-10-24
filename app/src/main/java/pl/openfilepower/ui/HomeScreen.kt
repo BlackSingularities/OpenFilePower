@@ -49,7 +49,7 @@ class HomeActions(val grantAccess: () -> Unit, val addFolder: () -> Unit, val ad
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(top = 4.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item {
             Row(Modifier.fillMaxWidth().padding(start = side, end = side, top = 4.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-                if (!medium) { RoundIcon(Icons.Rounded.Menu, "Źródła i foldery", size = 40.dp, flat = true, onClick = actions.menu); Spacer(Modifier.width(2.dp)) }
+                if (!medium || vm.sidebarHidden) { RoundIcon(Icons.Rounded.Menu, "Źródła i foldery", size = 40.dp, flat = true, onClick = actions.menu); Spacer(Modifier.width(2.dp)) }
                 Image(painterResource(pl.openfilepower.R.drawable.brand_mark), null, Modifier.size(if (medium) 34.dp else 30.dp))
                 Spacer(Modifier.width(10.dp))
                 Text("OpenFilePower", fontSize = if (medium) 23.sp else 20.sp, fontWeight = FontWeight.Black, letterSpacing = (-0.5).sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))

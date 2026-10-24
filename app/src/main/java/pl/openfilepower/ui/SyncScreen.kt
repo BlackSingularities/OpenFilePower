@@ -8,6 +8,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -40,7 +41,7 @@ import pl.openfilepower.*
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = side, end = side, top = 8.dp, bottom = 120.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             item {
                 Row(Modifier.fillMaxWidth().height(56.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    if (!medium) RoundIcon(Icons.Rounded.Menu, "Źródła i foldery", onClick = menu)
+                    if (!medium || vm.sidebarHidden) RoundIcon(Icons.Rounded.Menu, "Źródła i foldery", onClick = menu)
                     RoundIcon(Icons.AutoMirrored.Rounded.ArrowBack, "Wstecz") { vm.back() }
                     Column(Modifier.weight(1f).padding(start = 4.dp)) {
                         Text("Synchronizacja", fontSize = 20.sp, fontWeight = FontWeight.Bold)
@@ -99,13 +100,14 @@ import pl.openfilepower.*
                     MenuRow(Icons.Rounded.History, "Historia") { menu = false; history() }
                     MenuRow(Icons.Rounded.Smartphone, "Otwórz folder na telefonie") { menu = false; vm.openShortcut(pair.local) }
                     MenuRow(Icons.Rounded.Dns, "Otwórz folder na dysku") { menu = false; vm.openShortcut(pair.remote) }
+                    MenuRow(Icons.Rounded.Tab, "Otwórz oba foldery w kartach") { menu = false; vm.openShortcut(pair.local); vm.openShortcut(pair.remote) }
                     MenuRow(Icons.Rounded.DeleteOutline, "Usuń parę", danger = true) { menu = false; remove() }
                 }
             }
         }
         Spacer(Modifier.height(10.dp))
-        Endpoint(Icons.Rounded.Smartphone, vm.pathOf(pair.local))
-        Endpoint(if (vm.rootOf(pair.remote)?.network == true) Icons.Rounded.Dns else Icons.Rounded.Usb, vm.pathOf(pair.remote))
+        Endpoint(Icons.Rounded.Smartphone, vm.pathOf(pair.local)) { vm.openShortcut(pair.local) }
+        Endpoint(if (vm.rootOf(pair.remote)?.network == true) Icons.Rounded.Dns else Icons.Rounded.Usb, vm.pathOf(pair.remote)) { vm.openShortcut(pair.remote) }
         Spacer(Modifier.height(10.dp))
         when {
             progress != null -> {
@@ -149,11 +151,13 @@ import pl.openfilepower.*
     }
 }
 
-@Composable private fun Endpoint(icon: ImageVector, text: String) {
-    Row(Modifier.padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+/** Jedna strona pary – dotknięcie otwiera ten folder w karcie. */
+@Composable private fun Endpoint(icon: ImageVector, text: String, open: () -> Unit) {
+    Row(Modifier.fillMaxWidth().clip(Pill).clickable(onClick = open).padding(horizontal = 4.dp, vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
         Icon(icon, null, Modifier.size(15.dp), tint = Palette.TextDim)
         Spacer(Modifier.width(8.dp))
-        Text(text, fontSize = 12.sp, color = Palette.TextDim, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(text, fontSize = 12.sp, color = Palette.TextDim, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        Icon(Icons.AutoMirrored.Rounded.OpenInNew, "Otwórz $text", Modifier.size(14.dp), tint = Palette.TextFaint)
     }
 }
 @Composable private fun Status(icon: ImageVector, text: String, color: Color = Palette.White) {

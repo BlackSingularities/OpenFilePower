@@ -10,6 +10,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.MenuOpen
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -28,12 +29,17 @@ import androidx.compose.ui.unit.sp
 import pl.openfilepower.*
 
 /** Lewy panel: start, pamięć, foldery SAF, NAS, ulubione i kategorie. [done] zamyka szufladę na telefonie. */
-@Composable fun Sidebar(vm: ExplorerModel, modifier: Modifier, addLocal: () -> Unit, addNetwork: () -> Unit, settings: () -> Unit, done: () -> Unit = {}) {
-    Column(modifier.fillMaxHeight().background(Color(0xFF0B0B0B)).padding(horizontal = 12.dp)) {
-        Row(Modifier.height(72.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(pl.openfilepower.R.drawable.brand_mark), null, Modifier.size(40.dp))
-            Spacer(Modifier.width(10.dp))
-            Column { Text("OpenFilePower", fontWeight = FontWeight.Black, fontSize = 17.sp); Text("v${BuildConfig.VERSION_NAME}", color = Palette.TextFaint, fontSize = 10.sp) }
+@Composable fun Sidebar(vm: ExplorerModel, modifier: Modifier, addLocal: () -> Unit, addNetwork: () -> Unit, settings: () -> Unit, collapse: (() -> Unit)? = null, done: () -> Unit = {}) {
+    Column(modifier.fillMaxHeight().background(Color(0xFF0B0B0B)).padding(horizontal = 8.dp)) {
+        Row(Modifier.height(54.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(pl.openfilepower.R.drawable.brand_mark), null, Modifier.size(32.dp))
+            Spacer(Modifier.width(8.dp))
+            // Wersja jak indeks górny przy nazwie aplikacji.
+            Row(Modifier.weight(1f)) {
+                Text("OpenFilePower", fontWeight = FontWeight.Black, fontSize = 15.sp, maxLines = 1)
+                Text("v${BuildConfig.VERSION_NAME}", color = Palette.TextFaint, fontSize = 9.sp, lineHeight = 9.sp, maxLines = 1, modifier = Modifier.padding(start = 3.dp))
+            }
+            collapse?.let { Icon(Icons.AutoMirrored.Rounded.MenuOpen, "Schowaj pasek boczny", tint = Palette.TextDim, modifier = Modifier.size(32.dp).clip(CircleShape).clickable(onClick = it).padding(6.dp)) }
         }
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             NavRow(Icons.Rounded.Home, "Start", vm.view == View.Home) { vm.goHome(); done() }
@@ -97,9 +103,9 @@ import pl.openfilepower.*
 }
 
 @Composable private fun NavRowContent(icon: ImageVector, label: String, selected: Boolean, badge: Boolean, click: Modifier) {
-    Row(Modifier.fillMaxWidth().clip(Pill).background(if (selected) Palette.White else Color.Transparent).then(click).padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().clip(Pill).background(if (selected) Palette.White else Color.Transparent).then(click).padding(horizontal = 10.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
         Icon(icon, null, Modifier.size(19.dp), tint = if (selected) Palette.Ink else Palette.TextDim)
-        Spacer(Modifier.width(12.dp))
+        Spacer(Modifier.width(10.dp))
         Text(label, fontSize = 13.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium, color = if (selected) Palette.Ink else Palette.White, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
         if (badge) Box(Modifier.size(8.dp).clip(CircleShape).background(Palette.White))
     }
@@ -111,14 +117,14 @@ import pl.openfilepower.*
     val current = vm.place == p
     val root = vm.rootOf(p)
     Row(Modifier.fillMaxWidth().padding(start = (depth * 12).dp).clip(Pill).background(if (current) Palette.White else Color.Transparent).dropFolder(vm, p), verticalAlignment = Alignment.CenterVertically) {
-        Icon(if (expanded) Icons.Rounded.ExpandMore else Icons.Rounded.ChevronRight, "Rozwiń ${vm.title(p)}", tint = if (current) Palette.Ink else Palette.TextFaint, modifier = Modifier.size(32.dp).clip(CircleShape).clickable { vm.toggleTree(p) }.padding(7.dp))
+        Icon(if (expanded) Icons.Rounded.ExpandMore else Icons.Rounded.ChevronRight, "Rozwiń ${vm.title(p)}", tint = if (current) Palette.Ink else Palette.TextFaint, modifier = Modifier.size(28.dp).clip(CircleShape).clickable { vm.toggleTree(p) }.padding(6.dp))
         var menu by remember { mutableStateOf(false) }
         LongPressMenu(menu, { menu = false }, buildList {
             add("Otwórz w nowej karcie" to { vm.navigate(p, true); done() })
             add((if (p in vm.favorites) "Usuń z ulubionych" else "Dodaj do ulubionych") to { vm.toggleFavorite(p) })
             if (p.parts.isEmpty() && root != null && !root.direct) add("Odłącz" to { vm.removeRoot(root) })
         })
-        Row(Modifier.weight(1f).combinedClickable(onClick = { vm.navigate(p); done() }, onLongClick = { menu = true }).padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.weight(1f).combinedClickable(onClick = { vm.navigate(p); done() }, onLongClick = { menu = true }).padding(vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
             val icon = when {
                 depth > 0 -> Icons.Rounded.Folder
                 root?.network == true -> Icons.Rounded.Dns

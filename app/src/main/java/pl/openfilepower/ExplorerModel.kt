@@ -102,6 +102,8 @@ class ExplorerModel(app: Application) : AndroidViewModel(app) {
     var autoUpdate by mutableStateOf(prefs.autoUpdate); private set
     val compact get() = density < 0.7f
     var showFilters by mutableStateOf(prefs.flag("showFilters", false)); private set
+    /** Pasek boczny schowany na tablecie – wraca przyciskiem ☰. */
+    var sidebarHidden by mutableStateOf(prefs.flag("sidebarHidden", false)); private set
     var gridSize by mutableStateOf(runCatching { GridSize.valueOf(prefs.text("gridSize", GridSize.MEDIUM.name)) }.getOrDefault(GridSize.MEDIUM)); private set
     var typeFilter by mutableStateOf(TypeFilter.ALL)
     /** Kategorie ukryte w pasku nawigacji (nazwy enum). */
@@ -123,10 +125,7 @@ class ExplorerModel(app: Application) : AndroidViewModel(app) {
     var galleryFilter by mutableStateOf(MediaFilter.ALL)
     var galleryAlbums by mutableStateOf(false)
     var galleryAlbum by mutableStateOf<Place?>(null); private set
-    var live by mutableStateOf(false); private set
     var galleryByMonth by mutableStateOf(prefs.flag("galleryByMonth", false)); private set
-    var liveNew by mutableStateOf(0); private set
-    private var liveJob: Job? = null
 
     var analysis by mutableStateOf<Analysis?>(null)
     private var analysisJob: Job? = null
@@ -271,7 +270,6 @@ class ExplorerModel(app: Application) : AndroidViewModel(app) {
         view = View.Browse
         resetListing(); saveTabs(); refresh()
     }
-    private fun stopLive() { live = false; liveJob?.cancel() }
     fun switch(index: Int) { active = index; view = View.Browse; resetListing(); refresh() }
     fun closeTab(index: Int) {
         tabs = tabs.filterIndexed { i, _ -> i != index }
@@ -696,6 +694,7 @@ class ExplorerModel(app: Application) : AndroidViewModel(app) {
 
     // ——— Kompaktowość ———
     fun updateCompact(v: Boolean) { density = if (v) 0.5f else 0.9f; commitDensity() }
+    fun updateSidebarHidden(v: Boolean) { sidebarHidden = v; prefs.setFlag("sidebarHidden", v) }
     fun updateShowFilters(v: Boolean) { showFilters = v; prefs.setFlag("showFilters", v); if (!v) typeFilter = TypeFilter.ALL }
     fun updateGridSize(v: GridSize) { gridSize = v; prefs.setText("gridSize", v.name) }
     fun clearRecentPlaces() { recentPlaces = emptyList(); prefs.savePlaces("recentPlaces", emptyList()) }
@@ -765,36 +764,6 @@ class ExplorerModel(app: Application) : AndroidViewModel(app) {
                 analysis = Analysis(target, results.sortedByDescending { it.second }, false)
             }
             analysis = Analysis(target, results.sortedByDescending { it.second }, true)
-        }
-    }
-    /**
-     * Tryb sesji (jak Fotopodgląd): co 2 s sprawdza bieżący folder; nowe zdjęcia z aparatu lub karty Wi-Fi
-     * pojawiają się od razu, a najnowsze otwiera się automatycznie w przeglądarce.
-     */
-    fun toggleLive() {
-        if (live) { stopLive(); return }
-        val target = place ?: return
-        live = true; liveNew = 0
-        liveJob = viewModelScope.launch {
-            var known = entries.map { it.place }.toSet()
-            try {
-                while (isActive && place == target) {
-                    delay(2000)
-                    val fresh = runCatching { withContext(Dispatchers.IO) { files.list(target) } }.getOrNull() ?: continue
-                    val added = fresh.filter { it.place !in known }
-                    known = fresh.map { it.place }.toSet()
-                    if (fresh.size != entries.size || added.isNotEmpty()) entries = fresh
-                    val media = added.filter { FileRules.isMedia(it) }
-                    if (media.isNotEmpty()) {
-                        liveNew += media.size
-                        notice = "Nowe: ${media.size} · ${media.last().name}"
-                        // Tryb na żywo zawsze otwiera najnowsze zdjęcie – po to się go włącza.
-                        val all = visible.filter { FileRules.isMedia(it) && it.localUri != null }
-                        val newest = media.maxBy { it.modified }
-                        all.indexOfFirst { it.place == newest.place }.takeIf { it >= 0 }?.let { viewer = all to it }
-                    }
-                }
-            } finally { live = false }
         }
     }
     fun updateGalleryByMonth(v: Boolean) { galleryByMonth = v; prefs.setFlag("galleryByMonth", v) }

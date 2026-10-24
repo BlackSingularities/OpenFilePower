@@ -9,7 +9,9 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
@@ -80,18 +82,20 @@ import pl.openfilepower.*
         val medium = maxWidth >= 720.dp
         val inspect: (Item) -> Unit = { item -> vm.inspect(item); if (wide) inspectorOpen = true else phoneDetails = true }
         val actions = BrowserActions(
-            menu = { drawer = true }, inspect = inspect,
+            menu = { if (medium) vm.updateSidebarHidden(false) else drawer = true }, inspect = inspect,
             newFolder = { newFolder = true }, newFile = { newFile = true }, rename = { rename = it },
             delete = { deleting = vm.selectedItems }, compress = { compressing = vm.selectedItems }, settings = { settings = true },
             batchRename = { renaming = vm.selectedItems }, analyze = { vm.analyze() },
         )
         Row(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
-            if (medium) Sidebar(vm, Modifier.width(if (wide) 268.dp else 232.dp), { picker.launch(null) }, { network = true }, { settings = true })
+            AnimatedVisibility(medium && !vm.sidebarHidden, enter = expandHorizontally() + fadeIn(), exit = shrinkHorizontally() + fadeOut()) {
+                Sidebar(vm, Modifier.width(if (wide) 248.dp else 216.dp), { picker.launch(null) }, { network = true }, { settings = true }, collapse = { vm.updateSidebarHidden(true) })
+            }
             Box(Modifier.weight(1f).fillMaxHeight()) {
                 when (vm.view) {
-                    View.Home -> HomeScreen(vm, medium, HomeActions(grantAccess, { picker.launch(null) }, { network = true }, { settings = true }, inspect) { drawer = true })
-                    View.Trash -> TrashScreen(vm, medium) { drawer = true }
-                    View.Sync -> SyncScreen(vm, medium) { drawer = true }
+                    View.Home -> HomeScreen(vm, medium, HomeActions(grantAccess, { picker.launch(null) }, { network = true }, { settings = true }, inspect, actions.menu))
+                    View.Trash -> TrashScreen(vm, medium, actions.menu)
+                    View.Sync -> SyncScreen(vm, medium, actions.menu)
                     View.Gallery -> GalleryScreen(vm, medium, actions)
                     else -> BrowserScreen(vm, medium, wide, actions)
                 }
