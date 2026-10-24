@@ -26,9 +26,7 @@ import androidx.compose.ui.draganddrop.DragAndDropTransferData
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -105,14 +103,14 @@ fun describe(item: Item): String = if (item.directory) (if (item.children >= 0) 
 }
 
 /**
- * Wiersz listy: dotknięcie otwiera (w trybie zaznaczania – zaznacza), przytrzymanie zaznacza.
+ * Wiersz listy: dotknięcie otwiera (w trybie zaznaczania – zaznacza), przytrzymanie zaznacza
+ * (obsługuje je [dragSelect] listy – także na ikonie, inaczej zaznaczenie przełączało się dwa razy).
  * Wysokość, ikona i druga linia rosną płynnie z [density]; poniżej [BARE_CEILING] zostaje
  * najgęstsza, jednoliniowa lista bez ikon.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable fun FileRow(item: Item, vm: ExplorerModel, wide: Boolean, showPath: Boolean, density: Float, inspect: (Item) -> Unit) {
     val selected = item.place in vm.selected
-    val haptic = LocalHapticFeedback.current
     val d = density.coerceIn(DENSITY_MIN, GRID_FLOOR)
     val roomy = ((d - BARE_CEILING) / (GRID_FLOOR - BARE_CEILING)).coerceIn(0f, 1f)
     val bare = d < BARE_CEILING
@@ -129,7 +127,7 @@ fun describe(item: Item): String = if (item.directory) (if (item.children >= 0) 
             Box(Modifier.size(5.dp).clip(CircleShape).background(if (item.directory) Palette.Folder else Palette.TextFaint))
             Spacer(Modifier.width(9.dp))
         } else {
-            FileGlyph(item, vm, size = lerp(26.dp, 46.dp, roomy), corner = lerp(7.dp, 13.dp, roomy), onClick = open, onLongClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); vm.select(item) })
+            FileGlyph(item, vm, size = lerp(26.dp, 46.dp, roomy), corner = lerp(7.dp, 13.dp, roomy), onClick = open)
             Spacer(Modifier.width(lerp(9.dp, 13.dp, roomy)))
         }
         Column(Modifier.weight(1f)) {
@@ -146,7 +144,6 @@ fun describe(item: Item): String = if (item.directory) (if (item.children >= 0) 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable fun FileTile(item: Item, vm: ExplorerModel, cell: androidx.compose.ui.unit.Dp, inspect: (Item) -> Unit) {
     val selected = item.place in vm.selected
-    val haptic = LocalHapticFeedback.current
     val big = cell >= 150.dp
     val open = { if (vm.selecting) vm.select(item) else vm.open(item) }
     Column(
@@ -157,7 +154,7 @@ fun describe(item: Item): String = if (item.directory) (if (item.children >= 0) 
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         BoxWithConstraints(Modifier.fillMaxWidth()) {
-            FileGlyph(item, vm, size = maxWidth, corner = (maxWidth.value * 0.1f).dp, plain = true, onClick = open, onLongClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); vm.select(item) })
+            FileGlyph(item, vm, size = maxWidth, corner = (maxWidth.value * 0.1f).dp, plain = true, onClick = open)
             // Rozmiar (albo liczba elementów) jako plakietka w prawym górnym rogu; folder bez znanej
             // liczby elementów nie dostaje nic – pusty napis „Folder” tylko zaśmiecał kafelek.
             val badge = if (item.directory) (if (item.children >= 0) "${item.children} elem." else null) else formatSize(item.size)

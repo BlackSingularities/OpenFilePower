@@ -551,18 +551,20 @@ class ExplorerModel(app: Application) : AndroidViewModel(app) {
             notice = "Zapisano ${e.item.name}"; refresh()
         }
     }
-    private suspend fun shareable(item: Item): Uri = withContext(Dispatchers.IO) {
+    /** Plik lokalny – bezpośredni URI; z NAS – pobranie do pamięci podręcznej, które można anulować. */
+    private suspend fun shareable(item: Item, report: (String, Long, Long) -> Unit = { _, _, _ -> }, total: Long = item.size): Uri = withContext(Dispatchers.IO) {
         files.uri(item) ?: run {
             val folder = File(context.cacheDir, "exports/${UUID.randomUUID()}").apply { mkdirs() }
             val target = File(folder, item.name)
-            files.input(item).use { source -> target.outputStream().use { source.copyTo(it) } }
+            try { files.download(item, target, { cancelRequested }) { name, n -> report(name, n, total) } }
+            catch (e: Throwable) { folder.deleteRecursively(); throw e }
             FileProvider.getUriForFile(context, "${context.packageName}.files", target)
         }
     }
+    private fun network(items: List<Item>) = items.any { rootOf(it.place)?.network == true }
     fun openExternal(item: Item, chooser: Boolean = false) {
         if (item.directory) { navigate(item.place); return }
-        operation(if (rootOf(item.place)?.network == true) "Pobieranie z NAS" else "Otwieranie") {
-            val uri = shareable(item)
+        fun view(uri: Uri) {
             val mime = if (FileRules.isApk(item)) "application/vnd.android.package-archive" else item.mime
             val intent = Intent(Intent.ACTION_VIEW).setDataAndType(uri, mime).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
             try { context.startActivity(if (chooser) Intent.createChooser(intent, "Otwórz za pomocą").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) else intent) }
@@ -570,17 +572,22 @@ class ExplorerModel(app: Application) : AndroidViewModel(app) {
                 context.startActivity(Intent.createChooser(intent.setDataAndType(uri, "*/*"), "Otwórz za pomocą").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             }
         }
+        if (network(listOf(item))) longOperation("Pobieranie z NAS", "Anulowano pobieranie ${item.name}") { report -> view(shareable(item, report)) }
+        else operation("Otwieranie") { view(shareable(item)) }
     }
     fun share(items: List<Item> = selectedItems) {
         val list = items.filterNot { it.directory }
         if (list.isEmpty()) { notice = "Foldery nie mogą być udostępniane – spakuj je do ZIP"; return }
-        operation("Przygotowanie do udostępnienia") {
-            val uris = list.map { shareable(it) }
+        suspend fun send(report: (String, Long, Long) -> Unit) {
+            val total = list.sumOf { it.size }
+            val uris = list.map { shareable(it, report, total) }
             val intent = if (uris.size == 1) Intent(Intent.ACTION_SEND).setType(list[0].mime).putExtra(Intent.EXTRA_STREAM, uris[0])
             else Intent(Intent.ACTION_SEND_MULTIPLE).setType(if (list.map { it.mime.substringBefore('/') }.distinct().size == 1) list[0].mime.substringBefore('/') + "/*" else "*/*").putParcelableArrayListExtra(Intent.EXTRA_STREAM, ArrayList(uris))
             intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             context.startActivity(Intent.createChooser(intent, "Udostępnij").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         }
+        if (network(list)) longOperation("Pobieranie z NAS do udostępnienia", "Anulowano pobieranie") { report -> send(report) }
+        else operation("Przygotowanie do udostępnienia") { send { _, _, _ -> } }
     }
 
     // ——— Ustawienia ———
@@ -612,7 +619,7 @@ class ExplorerModel(app: Application) : AndroidViewModel(app) {
         }
     }
     /** Długa operacja: postęp w aplikacji i w powiadomieniu, usługa pierwszoplanowa chroni proces w tle. */
-    private fun longOperation(title: String, block: suspend (report: (String, Long, Long) -> Unit) -> Unit) {
+    private fun longOperation(title: String, cancelled: String = "Anulowano – ukończone elementy pozostały w celu", block: suspend (report: (String, Long, Long) -> Unit) -> Unit) {
         if (busy) return
         cancelRequested = false
         viewModelScope.launch {
@@ -635,7 +642,7 @@ class ExplorerModel(app: Application) : AndroidViewModel(app) {
                 }
             }
             try { block(report) }
-            catch (e: CancellationException) { notice = "Anulowano – ukończone elementy pozostały w celu"; tree.clear(); refresh() }
+            catch (e: CancellationException) { notice = cancelled; tree.clear(); refresh() }
             catch (e: Exception) { error = e.message ?: "Operacja nie powiodła się"; tree.clear(); refresh() }
             finally { progress = null; TransferService.stop(context) }
         }

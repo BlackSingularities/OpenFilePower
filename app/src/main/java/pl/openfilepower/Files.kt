@@ -464,6 +464,11 @@ class Files(private val context: Context, private val roots: () -> List<Root>) {
             throw e
         }
     }
+    /** Kopiuje plik do lokalnego [target]; przerwane pobieranie nie zostawia niepełnego pliku. */
+    fun download(item: Item, target: File, cancelled: () -> Boolean, progress: (String, Long) -> Unit) {
+        try { input(item).use { source -> target.outputStream().use { pump(source, it, item.name, cancelled, progress) } } }
+        catch (e: Throwable) { target.delete(); throw e }
+    }
     private fun pump(source: InputStream, target: OutputStream, name: String, cancelled: () -> Boolean, progress: (String, Long) -> Unit): Long {
         val buffer = ByteArray(256 * 1024)
         var total = 0L
