@@ -146,9 +146,8 @@ import pl.openfilepower.*
             val cert = vm.certificate
             val official = cert.equals(BuildConfig.RELEASE_CERT_SHA256, true)
             InfoRow(if (official) Icons.Rounded.Verified else Icons.Rounded.Warning, if (official) "Podpis: oficjalne wydanie" else "Podpis: kompilacja lokalna", cert?.chunked(2)?.take(8)?.joinToString(":")?.uppercase()?.let { "$it…" } ?: "nieznany")
-            ActionRow(Icons.Rounded.Code, "Kod źródłowy i wydania", "github.com/${BuildConfig.UPDATE_REPO}") { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/${BuildConfig.UPDATE_REPO}")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }
             InfoRow(Icons.Rounded.Gavel, "Licencja", "MIT · jcifs-ng: LGPL-2.1")
-            ActionRow(Icons.Rounded.Person, "Projekt i wykonanie", "redzikowski.com") { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://redzikowski.com")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }
+            ActionRow(Icons.Rounded.Person, "Pomysł i wykonanie", "Adam Rędzikowski · redzikowski.com") { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://redzikowski.com")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }
             ActionRow(Icons.Rounded.LocalCafe, "Postaw kawę", "Wesprzyj rozwój na buycoffee.to") { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://buycoffee.to/adamredzikowski")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }
         }
         Spacer(Modifier.height(24.dp))

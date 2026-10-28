@@ -1,10 +1,9 @@
 name: Android
+# Budowanie i wydanie wyłącznie po wypchnięciu tagu wersji (np. v1.2.3).
 on:
   push:
-    branches: [main]
     tags: ['v*']
-  pull_request:
-  workflow_dispatch:
+
 permissions:
   contents: read
 concurrency:

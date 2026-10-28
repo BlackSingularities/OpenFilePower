@@ -48,7 +48,7 @@ Wersja debug ma pakiet `pl.openfilepower.debug`, więc instaluje się obok wydan
 
 ## Wydania i podpis
 
-Każdy push na `main` buduje podpisany APK i publikuje wydanie: wersja z pliku `VERSION`, a gdy taki tag już istnieje – z numerem kompilacji (np. `0.2.0.57`). Notatki pochodzą z `CHANGELOG.md`. Commit z `[skip release]` nie tworzy wydania.
+Każdy wypchnięty tag `vX.Y.Z` buduje podpisany APK i publikuje wydanie: wersja z pliku `VERSION`, a gdy taki tag już istnieje – z numerem kompilacji (np. `0.2.0.57`). Notatki pochodzą z `CHANGELOG.md`. Commit z `[skip release]` nie tworzy wydania.
 
 CI sprawdza, czy APK jest podpisany certyfikatem o SHA-256 `470753b8716af4f6d59539aadacc0d9eadb17eabca4de18f6524a5ff2ae2fddb` (wartość `releaseCertSha256` w `app/build.gradle.kts`) – inne podpisanie przerywa wydanie, bo zainstalowane kopie nie mogłyby się zaktualizować. Sekrety Actions: `SIGNING_KEY` (keystore Base64), `SIGNING_STORE_PASSWORD`, `SIGNING_KEY_PASSWORD`, alias `openfilepower`. Lokalnie `assembleRelease` używa `.secrets/release.jks` (poza repozytorium). Utrata klucza uniemożliwi aktualizacje istniejących instalacji – przechowuj kopię zapasową.
 
