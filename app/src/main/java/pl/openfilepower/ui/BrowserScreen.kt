@@ -255,16 +255,17 @@ class BrowserActions(
 }
 
 @Composable private fun Breadcrumbs(vm: ExplorerModel, p: Place) {
+    if (p.parts.isEmpty()) return
     val scroll = rememberScrollState()
     LaunchedEffect(p) { scroll.animateScrollTo(scroll.maxValue) }
-    // Pełna ścieżka wyśrodkowana pod kartami; bieżący folder na końcu, pogrubiony. Gdy się nie mieści – przewija się do końca.
+    // Ścieżka do folderu nadrzędnego wyśrodkowana pod kartami – nazwa bieżącego folderu jest już w karcie. Gdy się nie mieści – przewija się do końca.
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         Row(Modifier.horizontalScroll(scroll).widthIn(min = maxWidth), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
-            (0..p.parts.size).forEach { depth ->
+            (0 until p.parts.size).forEach { depth ->
                 val crumb = p.copy(parts = p.parts.take(depth))
-                val last = depth == p.parts.size
-                Text(vm.title(crumb), maxLines = 1, fontSize = 12.sp, fontWeight = if (last) FontWeight.Bold else FontWeight.Medium, color = if (last) Palette.White else Palette.TextDim,
-                    modifier = Modifier.dropFolder(vm, crumb).clip(Pill).clickable(enabled = !last) { vm.navigate(crumb) }.padding(horizontal = 6.dp, vertical = 3.dp))
+                val last = depth == p.parts.size - 1
+                Text(vm.title(crumb), maxLines = 1, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = Palette.TextDim,
+                    modifier = Modifier.dropFolder(vm, crumb).clip(Pill).clickable { vm.navigate(crumb) }.padding(horizontal = 6.dp, vertical = 3.dp))
                 if (!last) Icon(Icons.Rounded.ChevronRight, null, Modifier.size(13.dp), tint = Palette.TextFaint)
             }
         }
