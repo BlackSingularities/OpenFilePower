@@ -29,7 +29,7 @@ class Updates(private val context: Context) {
     private val client = OkHttpClient.Builder().connectTimeout(20, TimeUnit.SECONDS).readTimeout(60, TimeUnit.SECONDS).build()
     private fun request(url: String) = Request.Builder().url(url).header("User-Agent", "OpenFilePower/${BuildConfig.VERSION_NAME}").build()
     fun check(): Release? {
-        client.newCall(request("https://api.github.com/repos/${BuildConfig.UPDATE_REPO}/releases/latest")).execute().use { response ->
+        client.newCall(request("https://redzikowski.com/api/github/repos/${BuildConfig.UPDATE_REPO}/releases/latest")).execute().use { response ->
             if (response.code == 404) return null
             check(response.isSuccessful) { "GitHub: HTTP ${response.code}" }
             val json = JSONObject(response.body!!.string())
@@ -42,7 +42,7 @@ class Updates(private val context: Context) {
         }
     }
     fun download(release: Release, progress: (Float) -> Unit = {}): File {
-        fun allowed(url: String) = url.startsWith("https://github.com/${BuildConfig.UPDATE_REPO}/releases/download/")
+        fun allowed(url: String) = url.startsWith("https://redzikowski.com/api/projects/openfilepower/asset/")
         require(allowed(release.apk) && allowed(release.checksum)) { "Nieprawidłowe źródło aktualizacji" }
         val expected = client.newCall(request(release.checksum)).execute().use { check(it.isSuccessful) { "Brak sumy kontrolnej" }; it.body!!.string().trim().substringBefore(' ') }
         require(expected.matches(Regex("[a-fA-F0-9]{64}"))) { "Brak prawidłowej sumy kontrolnej" }
