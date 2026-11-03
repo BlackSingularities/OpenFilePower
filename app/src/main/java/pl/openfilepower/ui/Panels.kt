@@ -11,6 +11,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Email
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.automirrored.rounded.Sort
 import androidx.compose.material.icons.automirrored.rounded.ViewList
@@ -148,6 +149,7 @@ import pl.openfilepower.*
             InfoRow(if (official) Icons.Rounded.Verified else Icons.Rounded.Warning, if (official) "Podpis: oficjalne wydanie" else "Podpis: kompilacja lokalna", cert?.chunked(2)?.take(8)?.joinToString(":")?.uppercase()?.let { "$it…" } ?: "nieznany")
             InfoRow(Icons.Rounded.Gavel, "Licencja", "MIT · jcifs-ng: LGPL-2.1")
             ActionRow(Icons.Rounded.Person, "Pomysł i wykonanie", "Adam Rędzikowski · redzikowski.com") { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://redzikowski.com")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }
+            ActionRow(Icons.Rounded.Email, "Kontakt", "kontakt@redzikowski.com") { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("mailto:kontakt@redzikowski.com")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }
             ActionRow(Icons.Rounded.LocalCafe, "Postaw kawę", "Wesprzyj rozwój na buycoffee.to") { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://buycoffee.to/adamredzikowski")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }
         }
         Spacer(Modifier.height(24.dp))
