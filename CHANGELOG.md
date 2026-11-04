@@ -1,3 +1,7 @@
+## 1.0.6
+
+- Komunikat o nowej wersji bez listy zmian, linków i informacji, skąd pobierana jest aktualizacja.
+
 ## 1.0.3
 
 ## 1.0.5

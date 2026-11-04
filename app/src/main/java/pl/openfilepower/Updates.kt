@@ -31,14 +31,14 @@ class Updates(private val context: Context) {
     fun check(): Release? {
         client.newCall(request("https://redzikowski.com/api/github/repos/${BuildConfig.UPDATE_REPO}/releases/latest")).execute().use { response ->
             if (response.code == 404) return null
-            check(response.isSuccessful) { "GitHub: HTTP ${response.code}" }
+            check(response.isSuccessful) { "HTTP ${response.code}" }
             val json = JSONObject(response.body!!.string())
             val version = json.getString("tag_name").removePrefix("v")
             if (!newer(version, BuildConfig.VERSION_NAME)) return null
             val assets = json.getJSONArray("assets")
             fun asset(name: String) = (0 until assets.length()).map { assets.getJSONObject(it) }.firstOrNull { it.getString("name") == name } ?: error("Wydanie nie zawiera $name")
             val apk = asset("OpenFilePower.apk")
-            return Release(version, json.optString("body"), apk.getString("browser_download_url"), asset("OpenFilePower.apk.sha256").getString("browser_download_url"), apk.optLong("size"))
+            return Release(version, "", apk.getString("browser_download_url"), asset("OpenFilePower.apk.sha256").getString("browser_download_url"), apk.optLong("size"))
         }
     }
     fun download(release: Release, progress: (Float) -> Unit = {}): File {

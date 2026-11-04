@@ -138,7 +138,7 @@ import pl.openfilepower.*
             ActionRow(Icons.Rounded.Dns, "Połącz z NAS", "SMB 2/3, hasło szyfrowane w Android Keystore") { close(); addNetwork() }
         }
         Group("Aktualizacje") {
-            SwitchRow(Icons.Rounded.SystemUpdate, "Sprawdzaj przy uruchomieniu", "GitHub Releases, bez telemetrii", vm.autoUpdate, enabled = BuildConfig.UPDATES_ENABLED) { vm.updateAutoUpdate(it) }
+            SwitchRow(Icons.Rounded.SystemUpdate, "Sprawdzaj przy uruchomieniu", "Bez telemetrii", vm.autoUpdate, enabled = BuildConfig.UPDATES_ENABLED) { vm.updateAutoUpdate(it) }
             ActionRow(Icons.Rounded.Refresh, if (vm.updateBusy) "Sprawdzanie…" else "Sprawdź teraz", vm.release?.let { "Dostępna wersja ${it.version}" } ?: "Zainstalowana ${BuildConfig.VERSION_NAME}", enabled = !vm.updateBusy) { vm.checkUpdates() }
             if (vm.release != null) ActionRow(Icons.Rounded.Download, "Pobierz i zainstaluj ${vm.release!!.version}", enabled = !vm.updateBusy) { vm.installUpdate() }
         }

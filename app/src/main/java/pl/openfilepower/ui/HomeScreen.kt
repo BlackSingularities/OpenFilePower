@@ -261,7 +261,6 @@ fun folderIcon(name: String): ImageVector = when (name) {
                 if (!vm.updateBusy) Icon(Icons.Rounded.Close, "Później", tint = Palette.TextDim, modifier = Modifier.padding(start = 4.dp).size(32.dp).clip(CircleShape).clickable { vm.updateBannerHidden = true }.padding(6.dp))
             }
             vm.updateProgress?.let { Meter(it, Modifier.fillMaxWidth().padding(top = 10.dp)) }
-            if (r.notes.isNotBlank()) Text(r.notes.replace(Regex("[#*`]"), "").trim(), color = Palette.TextDim, fontSize = 12.sp, lineHeight = 16.sp, maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp, start = 48.dp))
         }
     }
 }
