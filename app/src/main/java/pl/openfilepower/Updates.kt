@@ -29,7 +29,7 @@ class Updates(private val context: Context) {
     private val client = OkHttpClient.Builder().connectTimeout(20, TimeUnit.SECONDS).readTimeout(60, TimeUnit.SECONDS).build()
     private fun request(url: String) = Request.Builder().url(url).header("User-Agent", "OpenFilePower/${BuildConfig.VERSION_NAME}").build()
     fun check(): Release? {
-        client.newCall(request("https://redzikowski.com/api/github/repos/${BuildConfig.UPDATE_REPO}/releases/latest")).execute().use { response ->
+        client.newCall(request("https://redzikowski.com/api/releases/repos/${BuildConfig.UPDATE_REPO}/releases/latest")).execute().use { response ->
             if (response.code == 404) return null
             check(response.isSuccessful) { "HTTP ${response.code}" }
             val json = JSONObject(response.body!!.string())
