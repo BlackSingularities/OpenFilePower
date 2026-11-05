@@ -88,6 +88,17 @@ dependencies {
     implementation("io.coil-kt:coil-video:2.7.0")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("androidx.work:work-runtime-ktx:2.10.5")
+    // Protokoły sieciowe: SFTP (JSch, utrzymywany fork) i FTP/FTPS. WebDAV działa na OkHttp.
+    implementation("com.github.mwiede:jsch:0.2.21")
+    implementation("commons-net:commons-net:3.11.1")
+    // Archiwa: 7z/TAR/GZ/BZ2/XZ, RAR (do wersji 4) i ZIP z hasłem (AES).
+    implementation("org.apache.commons:commons-compress:1.27.1")
+    implementation("org.tukaani:xz:1.10")
+    implementation("com.github.junrar:junrar:7.5.5")
+    implementation("net.lingala.zip4j:zip4j:2.11.5")
+    // Blokada aplikacji odciskiem palca lub PIN-em urządzenia.
+    implementation("androidx.biometric:biometric:1.1.0")
+    implementation("androidx.fragment:fragment-ktx:1.8.5")
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test:runner:1.6.2")
     androidTestImplementation("androidx.test:rules:1.6.1")

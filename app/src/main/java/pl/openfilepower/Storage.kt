@@ -131,14 +131,16 @@ class Trash(private val base: File = File(Environment.getExternalStorageDirector
         File(base, ".nomedia").takeIf { !it.exists() }?.createNewFile()
         index.writeText(JSONArray().also { a -> list.forEach { e -> a.put(JSONObject().put("id", e.id).put("name", e.name).put("original", e.original).put("deleted", e.deleted).put("size", e.size).put("directory", e.directory)) } }.toString())
     }
-    @Synchronized fun put(file: File) {
+    @Synchronized fun put(file: File): TrashEntry {
         require(supports(file)) { "Kosz działa tylko w pamięci wewnętrznej" }
         val id = UUID.randomUUID().toString()
         val holder = File(base, id).apply { mkdirs() }
         val size = if (file.isDirectory) file.walkTopDown().filter { it.isFile }.sumOf { it.length() } else file.length()
         val directory = file.isDirectory
         check(file.renameTo(File(holder, file.name))) { holder.delete(); "Nie udało się przenieść do kosza: ${file.name}" }
-        save(entries() + TrashEntry(id, file.name, file.path, System.currentTimeMillis(), size, directory))
+        val entry = TrashEntry(id, file.name, file.path, System.currentTimeMillis(), size, directory)
+        save(entries() + entry)
+        return entry
     }
     @Synchronized fun restore(entry: TrashEntry): File {
         val stored = File(File(base, entry.id), entry.name)

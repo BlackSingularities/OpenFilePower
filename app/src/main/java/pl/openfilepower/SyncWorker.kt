@@ -47,9 +47,9 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
         }
         private fun notify(context: Context, pair: SyncPair, title: String, text: String) = runCatching {
             val nm = context.getSystemService(NotificationManager::class.java) ?: return@runCatching
-            nm.createNotificationChannel(NotificationChannel(CHANNEL, "Synchronizacja folderów", NotificationManager.IMPORTANCE_LOW))
+            nm.createNotificationChannel(NotificationChannel(CHANNEL, pl.openfilepower.ui.tr("Synchronizacja folderów"), NotificationManager.IMPORTANCE_LOW))
             val open = PendingIntent.getActivity(context, 1, Intent(context, MainActivity::class.java).setAction(MainActivity.ACTION_OPEN_SYNC).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP), PendingIntent.FLAG_IMMUTABLE)
-            nm.notify(pair.id.hashCode(), Notification.Builder(context, CHANNEL).setSmallIcon(R.drawable.ic_stat_transfer).setContentTitle(title).setContentText(text)
+            nm.notify(pair.id.hashCode(), Notification.Builder(context, CHANNEL).setSmallIcon(R.drawable.ic_stat_transfer).setContentTitle(pl.openfilepower.ui.tr(title)).setContentText(pl.openfilepower.ui.tr(text))
                 .setStyle(Notification.BigTextStyle().bigText(text)).setContentIntent(open).setAutoCancel(true).build())
         }
     }

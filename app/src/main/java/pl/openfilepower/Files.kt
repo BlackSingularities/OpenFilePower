@@ -30,7 +30,12 @@ data class Place(val root: String, val parts: List<String> = emptyList()) {
 
 /** Źródło plików: folder SAF (content://), pamięć z pełnym dostępem (file://) albo udział SMB (smb://). */
 data class Root(val id: String, val name: String, val address: String, val user: String = "", val domain: String = "", val password: String = "") {
-    val network get() = address.startsWith("smb://")
+    /** Udział SMB. */
+    val smb get() = address.startsWith("smb://")
+    /** SFTP, FTP lub WebDAV. */
+    val remote get() = RemoteProtocol.of(address) != null
+    /** Dowolne źródło sieciowe (plik trzeba pobrać, by otworzyć go w innej aplikacji). */
+    val network get() = smb || remote
     val direct get() = address.startsWith("file://")
     val path: String? get() = if (direct) Uri.parse(address).path else null
 }
@@ -60,10 +65,12 @@ object FileRules {
         return if (directory || dot <= 0) "$name ($n)" else "${name.substring(0, dot)} ($n)${name.substring(dot)}"
     }
     val textExtensions = setOf("txt", "md", "markdown", "json", "xml", "csv", "tsv", "log", "ini", "conf", "cfg", "yaml", "yml", "toml", "properties", "gradle", "kts", "kt", "java", "js", "ts", "py", "sh", "bat", "ps1", "c", "h", "cpp", "cs", "go", "rs", "html", "htm", "css", "sql", "srt", "nfo", "gpx", "kml")
-    val archiveExtensions = setOf("zip", "rar", "7z", "tar", "gz", "tgz", "bz2", "xz")
+    val archiveExtensions = setOf("zip", "rar", "7z", "tar", "gz", "tgz", "bz2", "tbz2", "xz", "txz")
     val documentExtensions = setOf("pdf", "doc", "docx", "odt", "rtf", "xls", "xlsx", "ods", "ppt", "pptx", "odp", "txt", "md", "csv", "epub")
     fun isText(item: Item) = !item.directory && (item.mime.startsWith("text/") || item.extension in textExtensions)
     fun isZip(item: Item) = !item.directory && item.extension == "zip"
+    /** Archiwa, które aplikacja umie otworzyć: ZIP, 7z, RAR, TAR (także .tar.gz/.tgz/.tar.bz2/.tar.xz), GZ, BZ2, XZ. */
+    fun isArchive(item: Item) = !item.directory && item.extension in setOf("zip", "7z", "rar", "tar", "gz", "tgz", "bz2", "tbz2", "tbz", "xz", "txz")
     fun isRaw(item: Item) = !item.directory && RawFormats.isRaw(item.name)
     fun isImage(item: Item) = !item.directory && (item.mime.startsWith("image/") || RawFormats.isRaw(item.name))
     fun isMedia(item: Item) = isImage(item) || isVideo(item)
@@ -75,6 +82,10 @@ object FileRules {
 /** Wszystkie metody blokują: wywołuj z Dispatchers.IO. Dane logowania nigdy nie trafiają do adresów SMB. */
 class Files(private val context: Context, private val roots: () -> List<Root>) {
     private val smbContexts = mutableMapOf<Root, CIFSContext>()
+    private val remotes = mutableMapOf<Root, RemoteFs>()
+    /** Połączenie SFTP/FTP/WebDAV – jedno na źródło, otwierane przy pierwszym użyciu. */
+    @Synchronized fun remote(root: Root): RemoteFs = remotes.getOrPut(root) { RemoteConnections.open(context, root) }
+    private fun remoteItem(place: Place, e: RemoteEntry) = Item(place, e.name, e.directory, if (e.directory) 0 else e.size, e.modified, if (e.directory) "inode/directory" else FileRules.mime(e.name))
     fun root(place: Place) = roots().firstOrNull { it.id == place.root } ?: error("Folder został odłączony")
 
     @Synchronized private fun smbContext(root: Root): CIFSContext = smbContexts.getOrPut(root) {
@@ -119,7 +130,8 @@ class Files(private val context: Context, private val roots: () -> List<Root>) {
     fun list(place: Place): List<Item> {
         val root = root(place)
         return when {
-            root.network -> smb(place, true).use { folder ->
+            root.remote -> { place.parts.forEach(FileRules::validateName); remote(root).list(place.parts).map { remoteItem(place.child(it.name), it) } }
+            root.smb -> smb(place, true).use { folder ->
                 folder.listFiles().map { f -> f.use {
                     val name = it.name.trimEnd('/')
                     Item(place.child(name), name, it.isDirectory, if (it.isDirectory) 0 else it.length(), it.lastModified(), FileRules.mime(name))
@@ -143,7 +155,8 @@ class Files(private val context: Context, private val roots: () -> List<Root>) {
     fun input(item: Item): InputStream {
         val root = root(item.place)
         return when {
-            root.network -> smb(item.place).inputStream
+            root.remote -> remote(root).input(item.place.parts)
+            root.smb -> smb(item.place).inputStream
             root.direct -> file(item.place).inputStream()
             else -> context.contentResolver.openInputStream(item.localUri ?: document(item.place).uri) ?: error("Nie można odczytać pliku")
         }
@@ -160,7 +173,8 @@ class Files(private val context: Context, private val roots: () -> List<Root>) {
     fun exists(place: Place): Boolean {
         val root = root(place)
         return when {
-            root.network -> smb(place).use { it.exists() }
+            root.remote -> place.parts.isEmpty() || remote(root).stat(place.parts) != null
+            root.smb -> smb(place).use { it.exists() }
             root.direct -> file(place).exists()
             place.parts.isEmpty() -> document(place).exists()
             else -> document(place.parent()!!).findFile(place.parts.last()) != null
@@ -172,7 +186,8 @@ class Files(private val context: Context, private val roots: () -> List<Root>) {
         require(!exists(dest)) { "Nazwa już istnieje: $name" }
         val root = root(parent)
         when {
-            root.network -> smb(dest, true).use { it.mkdir() }
+            root.remote -> remote(root).mkdir(dest.parts)
+            root.smb -> smb(dest, true).use { it.mkdir() }
             root.direct -> check(file(dest).mkdir()) { "Nie można utworzyć folderu $name" }
             else -> check(document(parent).createDirectory(name)?.name == name) { "Nie można utworzyć folderu $name" }
         }
@@ -190,7 +205,8 @@ class Files(private val context: Context, private val roots: () -> List<Root>) {
         require(name.equals(item.name, true) || !exists(dest)) { "Nazwa już istnieje" }
         val root = root(item.place)
         when {
-            root.network -> smb(item.place, item.directory).use { from -> smb(dest, item.directory).use { from.renameTo(it) } }
+            root.remote -> remote(root).rename(item.place.parts, dest.parts)
+            root.smb -> smb(item.place, item.directory).use { from -> smb(dest, item.directory).use { from.renameTo(it) } }
             root.direct -> check(file(item.place).renameTo(file(dest))) { "Zmiana nazwy nie powiodła się" }
             else -> check(document(item.place).renameTo(name)) { "Zmiana nazwy nie powiodła się" }
         }
@@ -199,7 +215,8 @@ class Files(private val context: Context, private val roots: () -> List<Root>) {
         require(item.place.parts.isNotEmpty()) { "Nie można usunąć źródła" }
         val root = root(item.place)
         when {
-            root.network -> smb(item.place, item.directory).use { it.delete() }
+            root.remote -> remote(root).delete(item.place.parts, item.directory)
+            root.smb -> smb(item.place, item.directory).use { it.delete() }
             root.direct -> check(file(item.place).deleteRecursively()) { "Nie udało się usunąć ${item.name}" }
             else -> check(document(item.place).delete()) { "Nie udało się usunąć ${item.name}" }
         }
@@ -209,7 +226,12 @@ class Files(private val context: Context, private val roots: () -> List<Root>) {
         FileRules.validateName(name)
         val root = root(parent)
         return when {
-            root.network -> smb(parent.child(name)).openOutputStream(false, SmbConstants.O_WRONLY or SmbConstants.O_CREAT or SmbConstants.O_EXCL, SmbConstants.FILE_WRITE_DATA, SmbConstants.FILE_NO_SHARE)
+            root.remote -> {
+                parent.parts.forEach(FileRules::validateName)
+                check(remote(root).stat(parent.child(name).parts) == null) { "Plik już istnieje: $name" }
+                remote(root).output(parent.child(name).parts)
+            }
+            root.smb -> smb(parent.child(name)).openOutputStream(false, SmbConstants.O_WRONLY or SmbConstants.O_CREAT or SmbConstants.O_EXCL, SmbConstants.FILE_WRITE_DATA, SmbConstants.FILE_NO_SHARE)
             root.direct -> {
                 val target = file(parent.child(name))
                 check(target.createNewFile()) { "Plik już istnieje lub brak uprawnień: $name" }
@@ -228,7 +250,8 @@ class Files(private val context: Context, private val roots: () -> List<Root>) {
     fun overwrite(item: Item, bytes: ByteArray) {
         val root = root(item.place)
         when {
-            root.network -> smb(item.place).openOutputStream(false).use { it.write(bytes) }
+            root.remote -> remote(root).output(item.place.parts).use { it.write(bytes) }
+            root.smb -> smb(item.place).openOutputStream(false).use { it.write(bytes) }
             root.direct -> {
                 // Zapis przez plik tymczasowy: awaria w trakcie nie zostawi połowy treści.
                 val target = file(item.place)
@@ -244,7 +267,8 @@ class Files(private val context: Context, private val roots: () -> List<Root>) {
         val root = root(place)
         val name = place.parts.lastOrNull() ?: root.name
         return when {
-            root.network -> smb(place).use { f ->
+            root.remote -> if (place.parts.isEmpty()) Item(place, name, true, 0, 0, "inode/directory") else remote(root).stat(place.parts)?.let { remoteItem(place, it.copy(name = name)) }
+            root.smb -> smb(place).use { f ->
                 if (!f.exists()) null else { val dir = f.isDirectory; Item(place, name, dir, if (dir) 0 else f.length(), f.lastModified(), if (dir) "inode/directory" else FileRules.mime(name)) }
             }
             root.direct -> file(place).takeIf { it.exists() }?.let { item(place, it) }
@@ -257,7 +281,8 @@ class Files(private val context: Context, private val roots: () -> List<Root>) {
         val root = root(place)
         runCatching {
             when {
-                root.network -> smb(place).use { it.lastModified = time }
+                root.remote -> remote(root).setModified(place.parts, time)
+                root.smb -> smb(place).use { it.lastModified = time }
                 root.direct -> file(place).setLastModified(time)
             }
         }
@@ -284,6 +309,18 @@ class Files(private val context: Context, private val roots: () -> List<Root>) {
         }
         setModified(parent.child(name), modified)
         return probe(parent.child(name)) ?: error("Nie udało się zapisać $name")
+    }
+    /** Zapisuje strumień jako nowy plik w [parent]; przy zajętej nazwie dodaje numer. Przerwany zapis nie zostawia pliku. */
+    fun receive(source: InputStream, parent: Place, name: String, cancelled: () -> Boolean, progress: (String, Long) -> Unit): Place {
+        val unique = uniqueName(parent, FileRules.sanitize(name), false)
+        var ok = false
+        try {
+            output(parent, unique, FileRules.mime(unique)).use { pump(source, it, unique, cancelled, progress) }
+            ok = true
+        } finally {
+            if (!ok) runCatching { probe(parent.child(unique))?.let(::delete) }
+        }
+        return parent.child(unique)
     }
     fun readText(item: Item, limit: Int = 2 * 1024 * 1024): String {
         require(item.size <= limit) { "Plik jest za duży do edycji (limit ${formatSize(limit.toLong())})" }
@@ -395,7 +432,8 @@ class Files(private val context: Context, private val roots: () -> List<Root>) {
         val from = root(item.place); val to = root(destination)
         when {
             from.direct && to.direct -> file(item.place).renameTo(file(destination.child(item.name)))
-            from.network && to.network && from.id == to.id -> {
+            from.remote && to.remote && from.id == to.id -> { remote(from).rename(item.place.parts, destination.child(item.name).parts); true }
+            from.smb && to.smb && from.id == to.id -> {
                 smb(item.place, item.directory).use { src -> smb(destination.child(item.name), item.directory).use { src.renameTo(it) } }; true
             }
             !from.network && !from.direct && !to.network && !to.direct -> {
@@ -417,8 +455,9 @@ class Files(private val context: Context, private val roots: () -> List<Root>) {
             val a = file(item.place).canonicalPath; val b = file(destination).canonicalPath
             return b == a || b.startsWith(a + File.separator)
         }
-        if (fromRoot.network != toRoot.network || fromRoot.direct != toRoot.direct) return false
-        if (!fromRoot.network) {
+        if (fromRoot.remote || toRoot.remote) return false
+        if (fromRoot.smb != toRoot.smb || fromRoot.direct != toRoot.direct) return false
+        if (!fromRoot.smb) {
             val from = document(item.place).uri
             val to = document(destination).uri
             if (from.authority != to.authority) return false
@@ -520,30 +559,45 @@ class Files(private val context: Context, private val roots: () -> List<Root>) {
         input(item).use { block(ZipInputStream(it.buffered(), charset("IBM437"))) }
     }
     /** Rozpakowuje ZIP do nowego folderu obok archiwum. Chroni przed ścieżkami wychodzącymi poza cel. */
-    fun extract(item: Item, parent: Place, cancelled: () -> Boolean, progress: (String, Long) -> Unit): Place {
-        val folder = mkdir(parent, uniqueName(parent, item.name.substringBeforeLast('.').ifBlank { "Archiwum" }, true))
-        try {
+    fun extract(item: Item, parent: Place, cancelled: () -> Boolean, progress: (String, Long) -> Unit): Place =
+        unpack(parent, item.name.substringBeforeLast('.').ifBlank { "Archiwum" }, cancelled, progress) { sink ->
             readZip(item) { zip ->
-                val made = mutableSetOf(folder)
-                fun ensure(place: Place) {
-                    if (place in made) return
-                    place.parent()?.let(::ensure)
-                    if (!exists(place)) mkdir(place.parent()!!, place.parts.last())
-                    made += place
-                }
                 while (true) {
                     if (cancelled()) throw CancellationException("Anulowano")
                     val entry = zip.nextEntry ?: break
-                    val segments = entry.name.replace('\\', '/').split('/').filter { it.isNotEmpty() && it != "." }
-                    require(segments.none { it == ".." }) { "Archiwum zawiera niebezpieczną ścieżkę: ${entry.name}" }
-                    if (segments.isEmpty()) continue
+                    sink(entry.name, entry.isDirectory, entry.time, if (entry.isDirectory) null else zip)
+                }
+            }
+        }
+    /**
+     * Wspólne rozpakowywanie dowolnego archiwum do nowego folderu [folderName] w [parent].
+     * [read] podaje kolejne wpisy (ścieżka, folder, data, treść); ścieżki z „..” są odrzucane,
+     * a nieudane rozpakowanie usuwa folder docelowy.
+     */
+    fun unpack(parent: Place, folderName: String, cancelled: () -> Boolean, progress: (String, Long) -> Unit, read: (sink: (String, Boolean, Long, InputStream?) -> Unit) -> Unit): Place {
+        val folder = mkdir(parent, uniqueName(parent, FileRules.sanitize(folderName), true))
+        try {
+            val made = mutableSetOf(folder)
+            fun ensure(place: Place) {
+                if (place in made) return
+                place.parent()?.let(::ensure)
+                if (!exists(place)) mkdir(place.parent()!!, place.parts.last())
+                made += place
+            }
+            read { path, directory, time, data ->
+                if (cancelled()) throw CancellationException("Anulowano")
+                val segments = path.replace('\\', '/').split('/').filter { it.isNotEmpty() && it != "." }
+                require(segments.none { it == ".." }) { "Archiwum zawiera niebezpieczną ścieżkę: $path" }
+                if (segments.isNotEmpty()) {
                     val clean = segments.map(FileRules::sanitize)
                     val target = folder.copy(parts = folder.parts + clean)
-                    if (entry.isDirectory) { ensure(target); continue }
-                    target.parent()?.let(::ensure)
-                    val name = if (exists(target)) uniqueName(target.parent()!!, clean.last(), false) else clean.last()
-                    output(target.parent()!!, name, FileRules.mime(name)).use { pump(zip, it, name, cancelled, progress) }
-                    if (root(folder).direct && entry.time > 0) file(target.parent()!!.child(name)).setLastModified(entry.time)
+                    if (directory || data == null) ensure(target)
+                    else {
+                        target.parent()?.let(::ensure)
+                        val name = if (exists(target)) uniqueName(target.parent()!!, clean.last(), false) else clean.last()
+                        output(target.parent()!!, name, FileRules.mime(name)).use { pump(data, it, name, cancelled, progress) }
+                        if (root(folder).direct && time > 0) file(target.parent()!!.child(name)).setLastModified(time)
+                    }
                 }
             }
         } catch (e: Exception) {
@@ -552,4 +606,13 @@ class Files(private val context: Context, private val roots: () -> List<Root>) {
         }
         return folder
     }
+    /** Nowy plik [name] w [parent] zapisywany przez [write]; przy błędzie plik jest usuwany. */
+    fun create(parent: Place, name: String, write: (OutputStream) -> Unit): Place {
+        val unique = uniqueName(parent, name, false)
+        var ok = false
+        try { output(parent, unique, FileRules.mime(unique)).use(write); ok = true }
+        finally { if (!ok) runCatching { probe(parent.child(unique))?.let(::delete) } }
+        return parent.child(unique)
+    }
+    fun copyStream(source: InputStream, target: OutputStream, name: String, cancelled: () -> Boolean, progress: (String, Long) -> Unit) = pump(source, target, name, cancelled, progress)
 }

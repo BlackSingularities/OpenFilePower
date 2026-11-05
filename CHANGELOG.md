@@ -1,3 +1,15 @@
+## 1.0.8
+
+- „Otwórz za pomocą”, „Udostępnij” (zapis w wybranym folderze) i wybieranie plików dla innych aplikacji.
+- Cofanie zmiany nazwy, przeniesienia, kopiowania i usunięcia do kosza przez kilka sekund.
+- SFTP, FTP/FTPS i WebDAV (np. Nextcloud).
+- Przesyłanie plików przez Wi-Fi z przeglądarki komputera.
+- Archiwa 7z, RAR (do wersji 4), TAR, GZ, BZ2, XZ oraz ZIP z hasłem AES-256.
+- Blokada aplikacji (odcisk palca, twarz, PIN) i folder prywatny.
+- Wyszukiwanie duplikatów, porządki i menedżer aplikacji z kopią APK.
+- Wersja angielska interfejsu.
+- Wyśrodkowane parametry EXIF w przeglądarce zdjęć.
+
 ## 1.0.7
 
 - Bez żadnych wzmianek o GitHubie w aplikacji: nowy adres serwera aktualizacji, komunikaty błędów bez nazw zewnętrznych serwerów.

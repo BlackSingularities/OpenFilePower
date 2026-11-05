@@ -19,7 +19,6 @@ import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -58,7 +57,7 @@ import pl.openfilepower.*
             if (details.preview != null) AsyncImage(details.preview, "Podgląd", Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
         }
         Spacer(Modifier.height(14.dp))
-        Text(item.name, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+        RawText(item.name, fontSize = 19.sp, fontWeight = FontWeight.Bold)
         Text(if (item.directory) "FOLDER" else item.mime.uppercase(), color = Palette.TextDim, fontSize = 10.sp, letterSpacing = 1.2.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(12.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -83,7 +82,7 @@ import pl.openfilepower.*
                 ActionRow(Icons.Rounded.Fingerprint, "Oblicz SHA-256", enabled = !vm.busy) { vm.hash(item, "SHA-256") }
                 ActionRow(Icons.Rounded.Tag, "Oblicz MD5", enabled = !vm.busy) { vm.hash(item, "MD5") }
             }
-            if (FileRules.isZip(item)) ActionRow(Icons.Rounded.Unarchive, "Rozpakuj obok archiwum", enabled = !vm.busy) { close?.invoke(); vm.extract(item) }
+            if (FileRules.isArchive(item)) ActionRow(Icons.Rounded.Unarchive, "Rozpakuj obok archiwum", enabled = !vm.busy) { close?.invoke(); vm.extract(item) }
             ActionRow(Icons.Rounded.Link, "Kopiuj ścieżkę") { vm.copyPath(item) }
             item.place.parent()?.takeIf { it != vm.place }?.let { parent -> ActionRow(Icons.Rounded.FolderOpen, "Pokaż w folderze") { close?.invoke(); vm.navigate(parent, true) } }
             if (item.directory) ActionRow(Icons.Rounded.SyncAlt, "Synchronizuj z dyskiem…", "NAS, karta SD lub USB") { close?.invoke(); vm.syncDraft = item.place }
@@ -106,6 +105,7 @@ import pl.openfilepower.*
     Panel("Ustawienia", close) {
         Group("Widok") {
             CompactChoice(Icons.Rounded.Contrast, "Motyw", ThemeMode.entries, Theme.mode, { it.label }) { Theme.mode = it; Preferences(context).setText("theme", it.name) }
+            CompactChoice(Icons.Rounded.Translate, "Język", Language.entries, I18n.language, { it.label }) { I18n.set(context, it) }
             CompactChoice(Icons.Rounded.GridView, "Układ", listOf(false, true), vm.grid, { if (it) "Siatka" else "Lista" }, icon = { if (it) Icons.Rounded.GridView else Icons.AutoMirrored.Rounded.ViewList }) { vm.updateGrid(it) }
             SwitchRow(Icons.Rounded.Visibility, "Ukryte pliki", "Pokazuj pliki i foldery zaczynające się od kropki", vm.showHidden) { vm.updateHidden(it) }
             SwitchRow(Icons.Rounded.Folder, "Foldery na początku", null, vm.foldersFirst) { vm.updateFoldersFirst(it) }
@@ -130,6 +130,15 @@ import pl.openfilepower.*
         Group("Pliki") {
             SwitchRow(Icons.Rounded.DeleteOutline, "Usuwaj do kosza", "Pamięć wewnętrzna: pliki można przywrócić. Foldery SAF i NAS usuwane są trwale.", vm.useTrash, enabled = vm.access) { vm.updateTrash(it) }
             ActionRow(Icons.Rounded.Delete, "Otwórz kosz") { close(); vm.openTrash() }
+        }
+        Group("Bezpieczeństwo") {
+            val activity = context as? androidx.fragment.app.FragmentActivity
+            SwitchRow(Icons.Rounded.Lock, "Blokada aplikacji", "Odcisk palca, twarz lub PIN urządzenia po powrocie do aplikacji", vm.appLock) { on ->
+                if (!on) vm.updateAppLock(false)
+                else if (activity != null) AppLock.authenticate(activity, "Włącz blokadę aplikacji", onError = { vm.error = it }) { vm.updateAppLock(true) }
+            }
+            SwitchRow(Icons.Rounded.EnhancedEncryption, "Folder prywatny", "Ukryty przed innymi aplikacjami, galerią i komputerem; otwierany po uwierzytelnieniu", vm.vaultEnabled) { vm.updateVaultEnabled(it) }
+            SwitchRow(Icons.Rounded.Apps, "Aplikacje w pasku", "Lista zainstalowanych aplikacji, kopie APK i odinstalowywanie", vm.appsEnabled) { vm.updateAppsEnabled(it) }
         }
         Group("Pamięć i źródła") {
             ActionRow(if (vm.access) Icons.Rounded.VerifiedUser else Icons.Rounded.Security, if (vm.access) "Pełny dostęp do plików: włączony" else "Nadaj pełny dostęp do plików", if (vm.access) "Wszystkie foldery, kategorie, kosz i miejsce na dysku" else "Bez niego widać tylko foldery wybrane ręcznie", onClick = grantAccess)
@@ -215,7 +224,7 @@ import pl.openfilepower.*
                 Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(if (name.endsWith('/')) Icons.Rounded.Folder else Icons.Rounded.Description, null, Modifier.size(16.dp), tint = Palette.TextDim)
                     Spacer(Modifier.width(8.dp))
-                    Text(name, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                    RawText(name, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                     if (!name.endsWith('/') && size >= 0) Text(formatSize(size), fontSize = 11.sp, color = Palette.TextDim)
                 }
             }
@@ -246,5 +255,38 @@ import pl.openfilepower.*
 @Composable fun ErrorDialog(message: String, dismiss: () -> Unit) {
     DarkDialog("Nie udało się wykonać operacji", dismiss, buttons = { PillButton("Rozumiem", onClick = dismiss) }) {
         SelectionContainer { Text(message, color = Palette.TextDim, fontSize = 13.sp) }
+    }
+}
+
+/** Pakowanie: nazwa, format (ZIP, 7z, TAR.GZ) i opcjonalne hasło dla ZIP (AES-256). */
+@Composable fun CompressDialog(count: Int, initial: String, dismiss: () -> Unit, submit: (String, ArchiveFormat, String?) -> Unit) {
+    var name by remember { mutableStateOf(initial) }
+    var format by remember { mutableStateOf(ArchiveFormat.ZIP) }
+    var password by remember { mutableStateOf("") }
+    var protect by remember { mutableStateOf(false) }
+    val valid = runCatching { FileRules.validateName("$name.${format.extension}") }.isSuccess && (!protect || password.length >= 4)
+    DarkDialog("Spakuj $count elem.", dismiss, buttons = {
+        PillButton("Anuluj", primary = false, onClick = dismiss)
+        PillButton("Spakuj", enabled = valid) { submit(name, format, if (protect && format == ArchiveFormat.ZIP) password else null) }
+    }) {
+        DarkField(name, { name = it }, "Nazwa archiwum", leading = Icons.Rounded.Archive)
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { ArchiveFormat.entries.forEach { f -> Chip(f.label, format == f) { format = f } } }
+        if (format == ArchiveFormat.ZIP) {
+            SwitchRow(Icons.Rounded.Lock, "Zabezpiecz hasłem", "Szyfrowanie AES-256", protect) { protect = it }
+            if (protect) DarkField(password, { password = it }, "Hasło (min. 4 znaki)", password = true, leading = Icons.Rounded.Key)
+        }
+        Text("Plik: $name.${format.extension}", color = Palette.TextFaint, fontSize = 11.sp)
+    }
+}
+
+@Composable fun PasswordDialog(name: String, wrong: Boolean, dismiss: () -> Unit, submit: (String) -> Unit) {
+    var password by remember { mutableStateOf("") }
+    DarkDialog("Hasło do archiwum", dismiss, buttons = {
+        PillButton("Anuluj", primary = false, onClick = dismiss)
+        PillButton("Otwórz", enabled = password.isNotEmpty()) { submit(password) }
+    }) {
+        Text(name, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+        if (wrong) Text("Nieprawidłowe hasło – spróbuj ponownie.", color = Palette.Record, fontSize = 13.sp)
+        DarkField(password, { password = it }, "Hasło", password = true, error = wrong, leading = Icons.Rounded.Lock, onDone = { if (password.isNotEmpty()) submit(password) })
     }
 }

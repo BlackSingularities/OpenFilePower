@@ -15,7 +15,6 @@ import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -29,7 +28,7 @@ import androidx.compose.ui.unit.sp
 import pl.openfilepower.*
 
 /** Lewy panel: start, pamięć, foldery SAF, NAS, ulubione i kategorie. [done] zamyka szufladę na telefonie. */
-@Composable fun Sidebar(vm: ExplorerModel, modifier: Modifier, addLocal: () -> Unit, addNetwork: () -> Unit, settings: () -> Unit, collapse: (() -> Unit)? = null, done: () -> Unit = {}) {
+@Composable fun Sidebar(vm: ExplorerModel, modifier: Modifier, addLocal: () -> Unit, addNetwork: () -> Unit, settings: () -> Unit, collapse: (() -> Unit)? = null, addRemote: () -> Unit = {}, wifiServer: () -> Unit = {}, done: () -> Unit = {}) {
     Column(modifier.fillMaxHeight().background(Color(0xFF0B0B0B)).padding(horizontal = 8.dp)) {
         Row(Modifier.height(54.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(pl.openfilepower.R.drawable.brand_mark), null, Modifier.size(32.dp))
@@ -46,6 +45,15 @@ import pl.openfilepower.*
             NavRow(Icons.Rounded.PhotoLibrary, "Galeria", vm.view == View.Gallery) { vm.openGallery(); done() }
             NavRow(Icons.Rounded.SyncAlt, "Synchronizacja", vm.view == View.Sync, badge = vm.sync.conflictCount > 0) { vm.openSync(); done() }
             NavRow(Icons.Rounded.DeleteOutline, "Kosz", vm.view == View.Trash) { vm.openTrash(); done() }
+            if (vm.appsEnabled) NavRow(Icons.Rounded.Apps, "Aplikacje", vm.view == View.Apps) { vm.openApps(); done() }
+            NavRow(Icons.Rounded.CleaningServices, "Porządki", vm.view == View.Cleanup) { vm.openCleanup(); done() }
+            if (vm.vaultEnabled) {
+                val activity = androidx.compose.ui.platform.LocalContext.current as? androidx.fragment.app.FragmentActivity
+                NavRow(Icons.Rounded.EnhancedEncryption, "Folder prywatny", vm.place?.root == Vault.ROOT_ID) {
+                    if (vm.vaultOpen) { vm.openVault(); done() }
+                    else if (activity != null) AppLock.authenticate(activity, "Otwórz folder prywatny", onError = { vm.error = it }) { vm.openVault(); done() }
+                }
+            }
 
             val direct = vm.roots.filter { it.direct }
             if (direct.isNotEmpty()) { SectionTitle("Pamięć"); direct.forEach { TreeNode(vm, Place(it.id), 0, done) } }
@@ -73,6 +81,8 @@ import pl.openfilepower.*
             SectionTitle("Sieć")
             vm.roots.filter { it.network }.forEach { root -> TreeNode(vm, Place(root.id), 0, done) }
             NavRow(Icons.Rounded.Dns, "Połącz z NAS (SMB)", false) { addNetwork(); done() }
+            NavRow(Icons.Rounded.Cloud, "SFTP, FTP, WebDAV", false) { addRemote(); done() }
+            NavRow(Icons.Rounded.Wifi, if (vm.wifiServer != null) "Serwer Wi-Fi: włączony" else "Przesyłanie przez Wi-Fi", false, badge = vm.wifiServer != null) { wifiServer(); done() }
 
             if (vm.access && vm.navCategories.isNotEmpty()) {
                 SectionTitle("Kategorie") {

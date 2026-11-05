@@ -22,7 +22,6 @@ import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.automirrored.rounded.WrapText
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -53,7 +52,7 @@ import pl.openfilepower.*
         Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             RoundIcon(Icons.Rounded.Close, "Zamknij edytor", onClick = tryClose)
             Column(Modifier.weight(1f).padding(start = 4.dp)) {
-                Text(state.item.name, fontWeight = FontWeight.Bold, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                RawText(state.item.name, fontWeight = FontWeight.Bold, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text((if (state.modified) "● Niezapisane zmiany · " else "") + "${state.text.lines().size} wierszy · ${formatSize(state.text.toByteArray().size.toLong())}", fontSize = 11.sp, color = if (state.modified) Palette.White else Palette.TextDim)
             }
             RoundIcon(Icons.Rounded.TextDecrease, "Mniejsza czcionka", size = 38.dp, flat = true) { fontSize = (fontSize - 1).coerceAtLeast(9f) }

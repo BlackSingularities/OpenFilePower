@@ -16,7 +16,6 @@ import androidx.compose.material.icons.automirrored.rounded.Article
 import androidx.compose.material.icons.automirrored.rounded.InsertDriveFile
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -131,7 +130,7 @@ fun describe(item: Item): String = if (item.directory) (if (item.children >= 0) 
             Spacer(Modifier.width(lerp(9.dp, 13.dp, roomy)))
         }
         Column(Modifier.weight(1f)) {
-            Text(item.name, fontSize = lerp(12.sp, 14.5.sp, roomy), maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Medium, color = if (item.hidden) Palette.TextDim else Palette.White)
+            RawText(item.name, fontSize = lerp(12.sp, 14.5.sp, roomy), maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Medium, color = if (item.hidden) Palette.TextDim else Palette.White)
             if (roomy > 0.25f) Text(if (showPath) vm.pathOf(item.place.parent() ?: item.place) else describe(item), color = Palette.TextDim, fontSize = lerp(10.sp, 11.5.sp, roomy), maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         if (wide && !showPath) Text(formatDate(item.modified), color = Palette.TextFaint, fontSize = 11.sp, modifier = Modifier.padding(horizontal = 12.dp))
@@ -163,7 +162,7 @@ fun describe(item: Item): String = if (item.directory) (if (item.children >= 0) 
         }
         Spacer(Modifier.height(6.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(item.name, maxLines = 2, overflow = TextOverflow.Ellipsis, fontSize = if (big) 13.sp else 11.5.sp, fontWeight = FontWeight.Medium, lineHeight = if (big) 16.sp else 14.sp, textAlign = TextAlign.Center, modifier = Modifier.weight(1f, fill = !big))
+            RawText(item.name, maxLines = 2, overflow = TextOverflow.Ellipsis, fontSize = if (big) 13.sp else 11.5.sp, fontWeight = FontWeight.Medium, lineHeight = if (big) 16.sp else 14.sp, textAlign = TextAlign.Center, modifier = Modifier.weight(1f, fill = !big))
             if (big) RoundIcon(Icons.Rounded.Info, "Właściwości ${item.name}", size = 28.dp, flat = true, tint = Palette.TextFaint) { inspect(item) }
         }
     }

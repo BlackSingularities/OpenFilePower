@@ -19,7 +19,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -237,7 +236,7 @@ fun folderIcon(name: String): ImageVector = when (name) {
             Icon(iconFor(item), null, tint = Palette.TextDim, modifier = Modifier.size(30.dp))
             Text(item.extension.uppercase().ifBlank { "PLIK" }.take(5), color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.BottomEnd).padding(6.dp).clip(Pill).background(Color.Black.copy(alpha = 0.7f)).padding(horizontal = 6.dp, vertical = 2.dp))
         }
-        Text(item.name, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 7.dp, start = 2.dp, end = 2.dp))
+        RawText(item.name, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 7.dp, start = 2.dp, end = 2.dp))
         Text("${formatShortDate(item.modified)} · ${formatSize(item.size)}", color = Palette.TextDim, fontSize = 10.sp, maxLines = 1, modifier = Modifier.padding(top = 1.dp, start = 2.dp, bottom = 2.dp))
     }
 }

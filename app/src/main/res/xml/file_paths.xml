@@ -1,6 +1,8 @@
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
     <cache-path name="exports" path="exports/" />
     <cache-path name="updates" path="updates/" />
+    <!-- Folder prywatny (udostępnianie i otwieranie jego plików w innych aplikacjach). -->
+    <files-path name="vault" path="vault/" />
     <external-path name="storage" path="." />
     <!-- Karty SD i pamięci USB (pełny dostęp do pamięci). -->
     <root-path name="volumes" path="storage/" />

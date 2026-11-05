@@ -20,7 +20,11 @@ data class FolderTab(val id: String = UUID.randomUUID().toString(), val place: P
 data class Details(val item: Item, val values: List<Pair<String, String>>, val preview: Any? = null, val loading: Boolean = false)
 data class PendingPaste(val clip: Clip, val destination: Place, val conflicts: List<Item>)
 data class EditorState(val item: Item, val original: String, val text: String, val readOnly: Boolean = false) { val modified get() = text != original }
-data class ArchiveState(val item: Item, val entries: List<Pair<String, Long>>)
+data class ArchiveState(val item: Item, val entries: List<Pair<String, Long>>, val password: String? = null)
+/** Prośba o hasło do archiwum; [extract] – po podaniu od razu rozpakuj. */
+data class PasswordPrompt(val item: Item, val extract: Boolean, val wrong: Boolean)
+/** Operacja, którą można cofnąć przez kilka sekund po wykonaniu (pasek z przyciskiem „Cofnij”). */
+class Undo(val message: String, val action: suspend () -> Unit)
 data class Progress(val title: String, val text: String = "", val fraction: Float? = null, val cancellable: Boolean = false)
 
 enum class MediaFilter(val label: String) { ALL("Wszystko"), PHOTOS("Zdjęcia"), RAW("RAW"), VIDEOS("Wideo") }
@@ -46,16 +50,24 @@ sealed interface View {
     data object Trash : View
     data object Gallery : View
     data object Sync : View
+    data object Apps : View
+    data object Cleanup : View
 }
 
 class ExplorerModel(app: Application) : AndroidViewModel(app) {
     private val context get() = getApplication<Application>()
     val prefs = Preferences(app)
     var roots by mutableStateOf(prefs.roots()); private set
-    val files = Files(app) { roots }
+    /** Folder prywatny jest źródłem tylko po uwierzytelnieniu (do najbliższej blokady). */
+    var vaultOpen by mutableStateOf(false); private set
+    private val vaultRoot by lazy { Vault.root(app) }
+    /** Wszystkie źródła, także wirtualne: pliki otwarte z innych aplikacji i folder prywatny. */
+    val allRoots get() = roots + externalRoot + if (vaultOpen) listOf(vaultRoot) else emptyList()
+    val files = Files(app) { allRoots }
     private val updater = Updates(app)
     private val media = MediaIndex(app)
     val trash = Trash()
+    val archives = Archives(app, files)
     val sync = SyncController(app, viewModelScope, { notice = it }, { error = it })
 
     var view by mutableStateOf<View>(View.Home); private set
@@ -73,14 +85,22 @@ class ExplorerModel(app: Application) : AndroidViewModel(app) {
     val busy get() = progress != null
     var error by mutableStateOf<String?>(null)
     var notice by mutableStateOf<String?>(null)
+    /** Ostatnia operacja do cofnięcia; pasek znika po kilku sekundach. */
+    var undo by mutableStateOf<Undo?>(null)
     var query by mutableStateOf("")
     var searchResults by mutableStateOf<List<Item>?>(null); private set
     var searching by mutableStateOf(false); private set
     var pendingPaste by mutableStateOf<PendingPaste?>(null)
     var editor by mutableStateOf<EditorState?>(null)
     var archive by mutableStateOf<ArchiveState?>(null)
+    var passwordPrompt by mutableStateOf<PasswordPrompt?>(null)
     var viewer by mutableStateOf<Pair<List<Item>, Int>?>(null)
     var trashEntries by mutableStateOf<List<TrashEntry>>(emptyList()); private set
+
+    // ——— Prośby z innych aplikacji (ExternalActivity) ———
+    var external by mutableStateOf<ExternalRequest?>(null); private set
+    /** Kończy okno ExternalActivity z wynikiem (null – anulowano). Ustawiane i czyszczone przez aktywność. */
+    var finishExternal: ((Intent?) -> Unit)? = null
 
     // Ustawienia widoku – zapamiętywane między uruchomieniami.
     /**
@@ -172,6 +192,78 @@ class ExplorerModel(app: Application) : AndroidViewModel(app) {
         if (prefs.autoUpdate && BuildConfig.UPDATES_ENABLED) checkUpdates(false)
     }
 
+    // ——— Inne aplikacje ———
+    fun startExternal(request: ExternalRequest) {
+        external = request
+        // Bez otwartych kart od razu pokaż pamięć wewnętrzną – tam zwykle się wybiera lub zapisuje.
+        if (view != View.Browse && access) navigate(Place(StorageAccess.INTERNAL_ID), tabs.isNotEmpty())
+    }
+    fun cancelExternal() { external = null; finishExternal?.invoke(null) }
+    /** Wybór zakończony: zwraca adresy plików aplikacji, która prosiła o plik. */
+    fun pickItems(items: List<Item>) {
+        val request = external as? ExternalRequest.Pick ?: return
+        val chosen = items.filter { request.accepts(it) }.let { if (request.multiple) it else it.take(1) }
+        if (chosen.isEmpty()) { notice = "Ten plik nie pasuje do tego, o co prosi aplikacja"; return }
+        val deliver: suspend ((String, Long, Long) -> Unit) -> Unit = { report ->
+            val total = chosen.sumOf { it.size }
+            val uris = chosen.map { shareable(it, report, total) }
+            external = null
+            finishExternal?.invoke(ExternalActivity.result(uris))
+        }
+        if (network(chosen)) longOperation("Pobieranie z NAS", "Anulowano pobieranie") { report -> deliver(report) }
+        else operation("Przygotowanie pliku") { deliver { _, _, _ -> } }
+    }
+    /** Zapis plików udostępnionych przez inną aplikację w bieżącym folderze. */
+    fun saveIncomingHere() {
+        val request = external as? ExternalRequest.Save ?: return
+        val target = place ?: run { notice = "Otwórz folder, w którym zapisać"; return }
+        longOperation("Zapisywanie w ${title(target)}") { report ->
+            var saved = 0
+            withContext(Dispatchers.IO) {
+                request.uris.forEach { uri ->
+                    if (cancelRequested) throw CancellationException("Anulowano")
+                    val name = displayName(context, uri)
+                    val total = contentSize(context, uri)
+                    (context.contentResolver.openInputStream(uri) ?: error("Nie można odczytać $name")).use { input ->
+                        files.receive(input, target, name, { cancelRequested }) { n, b -> report(n, b, total) }
+                    }
+                    saved++
+                }
+                request.text?.let { text ->
+                    val name = files.uniqueName(target, "Notatka ${java.text.SimpleDateFormat("yyyy-MM-dd HH-mm", java.util.Locale.ROOT).format(java.util.Date())}.txt", false)
+                    files.receive(text.byteInputStream(), target, name, { cancelRequested }) { _, _ -> }
+                    saved++
+                }
+            }
+            external = null
+            refresh(); notice = "Zapisano $saved elem. w ${title(target)}"
+            delay(900)
+            finishExternal?.invoke(null)
+        }
+    }
+    /** „Otwórz za pomocą” z innej aplikacji: plik czytany wprost z adresu content://, bez kopiowania. */
+    fun openIncoming(uri: Uri, type: String?) {
+        val name = displayName(context, uri)
+        val mime = type?.takeIf { it.contains('/') && it != "*/*" } ?: FileRules.mime(name)
+        val item = Item(Place(EXTERNAL_ROOT_ID, listOf(name)), name, false, contentSize(context, uri), 0, mime, uri)
+        when {
+            FileRules.isMedia(item) -> viewer = listOf(item) to 0
+            FileRules.isText(item) -> operation("Otwieranie ${item.name}") {
+                val text = withContext(Dispatchers.IO) { files.readText(item) }
+                val writable = runCatching { context.contentResolver.openFileDescriptor(uri, "rw")?.close() }.isSuccess
+                editor = EditorState(item, text, text, readOnly = !writable)
+            }
+            FileRules.isArchive(item) -> openArchive(item)
+            else -> openExternal(item, true)
+        }
+    }
+    /** Folder rozpakowania: obok archiwum, a dla plików z innych aplikacji – Pobrane. */
+    private fun extractTarget(item: Item): Place? {
+        if (item.place.root != EXTERNAL_ROOT_ID) return item.place.parent()
+        if (!access) { error = "Nadaj pełny dostęp do plików, aby rozpakować archiwum do folderu Pobrane"; return null }
+        return Place(StorageAccess.INTERNAL_ID, listOf("Download"))
+    }
+
     // ——— Źródła i dostęp do pamięci ———
     /** Po powrocie do aplikacji: dodaje lub usuwa źródła pamięci z pełnym dostępem. */
     fun syncAccess() {
@@ -224,8 +316,25 @@ class ExplorerModel(app: Application) : AndroidViewModel(app) {
             roots = roots + root; prefs.saveRoots(roots); navigate(Place(root.id), true); notice = "Połączono z NAS"
         }
     }
+    /** Dodaje serwer SFTP/FTP/WebDAV po sprawdzeniu, że da się wylistować folder startowy. */
+    fun addRemote(protocol: RemoteProtocol, host: String, port: Int, path: String, user: String, password: String, name: String, done: () -> Unit) {
+        operation("Łączenie z ${protocol.label}") {
+            val cleanHost = host.trim().removePrefix("${protocol.scheme}://").removePrefix("https://").removePrefix("http://").trimEnd('/')
+            require(cleanHost.matches(Regex("[a-zA-Z0-9.:\\[\\]-]+"))) { "Podaj poprawny adres serwera" }
+            require(port in 1..65535) { "Nieprawidłowy port" }
+            val base = path.replace('\\', '/').split('/').map { it.trim() }.filter { it.isNotEmpty() }
+            base.forEach(FileRules::validateName)
+            val address = RemoteAddress(protocol, cleanHost, port, base).toString()
+            require(roots.none { it.address == address && it.user == user }) { "Ten serwer jest już dodany" }
+            val label = name.trim().ifBlank { (base.lastOrNull()?.let { "$it na " } ?: "") + cleanHost }
+            val root = Root(UUID.randomUUID().toString(), label, address, user.trim(), "", password)
+            withContext(Dispatchers.IO) { RemoteConnections.open(context, root).use { it.list(emptyList()) } }
+            roots = roots + root; prefs.saveRoots(roots); done(); navigate(Place(root.id), true); notice = "Połączono z ${protocol.label}"
+        }
+    }
     fun removeRoot(root: Root) {
         if (busy || root.direct) return
+        if (root.remote) context.getSharedPreferences("hostkeys", android.content.Context.MODE_PRIVATE).edit().remove(RemoteAddress.parse(root.address).let { "${it.host}:${it.port}" }).apply()
         if (!root.network) runCatching { context.contentResolver.releasePersistableUriPermission(Uri.parse(root.address), Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION) }
         roots = roots - root; prefs.saveRoots(roots)
         tabs = tabs.filterNot { it.place.root == root.id }; active = 0; saveTabs()
@@ -233,10 +342,10 @@ class ExplorerModel(app: Application) : AndroidViewModel(app) {
         if (tabs.isEmpty()) view = View.Home
         refresh()
     }
-    fun rootOf(p: Place) = roots.find { it.id == p.root }
+    fun rootOf(p: Place) = allRoots.find { it.id == p.root }
 
     // ——— Nawigacja ———
-    private fun saveTabs() = prefs.savePlaces("tabs", tabs.map { it.place })
+    private fun saveTabs() = prefs.savePlaces("tabs", tabs.map { it.place }.filter { it.root != Vault.ROOT_ID })
     fun title(p: Place) = p.parts.lastOrNull() ?: rootOf(p)?.name ?: "Folder"
     fun pathOf(p: Place) = (listOf(rootOf(p)?.name ?: "?") + p.parts).joinToString(" / ")
     private fun resetListing() { query = ""; searchJob?.cancel(); searchResults = null; searching = false; selected = emptySet() }
@@ -258,6 +367,7 @@ class ExplorerModel(app: Application) : AndroidViewModel(app) {
         TypeFilter.ARCHIVES -> !item.directory && item.extension in FileRules.archiveExtensions
     }
     private fun rememberPlace(p: Place) {
+        if (p.root == Vault.ROOT_ID) return
         recentPlaces = (listOf(p) + recentPlaces.filterNot { it == p }).filter { r -> roots.any { it.id == r.root } }.take(12)
         prefs.savePlaces("recentPlaces", recentPlaces)
     }
@@ -314,6 +424,8 @@ class ExplorerModel(app: Application) : AndroidViewModel(app) {
                     is View.Category -> entries = withContext(Dispatchers.IO) { media.files(v.category, roots) }
                     View.Gallery -> entries = withContext(Dispatchers.IO) { media.gallery(roots) }
                     View.Sync -> sync.reload()
+                    View.Apps -> apps = withContext(Dispatchers.IO) { InstalledApps.list(context) }
+                    View.Cleanup -> {}
                     View.Trash -> trashEntries = withContext(Dispatchers.IO) { trash.entries().sortedByDescending { it.deleted } }
                 }
             }
@@ -403,7 +515,16 @@ class ExplorerModel(app: Application) : AndroidViewModel(app) {
                 var previous = 0L
                 withContext(Dispatchers.IO) { files.transfer(clip, target, { cancelRequested }, policy) { name, copied -> report(name, copied - previous, total); previous = copied } }
                 if (clip.move && fromClipboard) clipboard = null
-                tree.clear(); refresh(); notice = if (clip.move) "Przeniesiono ${clip.items.size} elem." else "Skopiowano ${clip.items.size} elem."
+                tree.clear(); refresh()
+                val message = if (clip.move) "Przeniesiono ${clip.items.size} elem." else "Skopiowano ${clip.items.size} elem."
+                // Cofnąć da się tylko operację bez konfliktów nazw – wtedy wiadomo dokładnie, co powstało w celu.
+                val moved = clip.items.filter { it.place.parent() != target }
+                if (policy == Conflict.FAIL && moved.isNotEmpty()) offerUndo(message) {
+                    val created = moved.map { it.copy(place = target.child(it.name)) }
+                    if (clip.move) created.zip(moved).groupBy { it.second.place.parent()!! }.forEach { (origin, pairs) ->
+                        files.transfer(Clip(pairs.map { it.first }, true), origin, { false }) { _, _ -> }
+                    } else created.forEach { files.delete(it) }
+                } else notice = message
             }
         }
     }
@@ -420,37 +541,60 @@ class ExplorerModel(app: Application) : AndroidViewModel(app) {
             if (created != null && FileRules.isText(created)) editor = EditorState(created, "", "")
         }
     }
-    fun rename(item: Item, name: String) = operation("Zmiana nazwy") { withContext(Dispatchers.IO) { files.rename(item, name) }; tree.clear(); refresh(); notice = "Zmieniono nazwę na $name" }
+    fun rename(item: Item, name: String) = operation("Zmiana nazwy") {
+        withContext(Dispatchers.IO) { files.rename(item, name) }; tree.clear(); refresh()
+        val renamed = item.copy(place = item.place.parent()!!.child(name), name = name)
+        offerUndo("Zmieniono nazwę na $name") { files.rename(renamed, item.name) }
+    }
+    fun offerUndo(message: String, action: suspend () -> Unit) { undo = Undo(message, action) }
+    /** Wykonuje cofnięcie ostatniej operacji (wywoływane z paska „Cofnij”). */
+    fun performUndo(u: Undo) {
+        if (undo === u) undo = null
+        operation("Cofanie") { withContext(Dispatchers.IO) { u.action() }; tree.clear(); refresh(); notice = "Cofnięto" }
+    }
     /** Czy zaznaczone elementy trafią do kosza (pamięć wewnętrzna) zamiast trwałego usunięcia. */
     fun trashable(items: List<Item> = selectedItems): Boolean = useTrash && items.isNotEmpty() && items.all { rootOf(it.place)?.direct == true && trash.supports(files.file(it.place)) }
     fun deleteSelected(items: List<Item> = selectedItems) {
         if (items.isEmpty()) return
         val toTrash = trashable(items)
         longOperation(if (toTrash) "Przenoszenie do kosza" else "Usuwanie ${items.size} elem.") { report ->
+            val trashed = mutableListOf<TrashEntry>()
             withContext(Dispatchers.IO) {
                 items.forEach { item ->
                     if (cancelRequested) throw CancellationException("Anulowano")
                     report(item.name, 1, items.size.toLong())
-                    if (toTrash) trash.put(files.file(item.place)) else files.delete(item)
+                    if (toTrash) trashed += trash.put(files.file(item.place)) else files.delete(item)
                 }
             }
             selected = emptySet(); tree.clear(); refresh()
-            notice = if (toTrash) "Przeniesiono do kosza: ${items.size}" else "Usunięto trwale: ${items.size}"
+            if (toTrash) offerUndo("Przeniesiono do kosza: ${items.size}") { trashed.forEach { trash.restore(it) } }
+            else notice = "Usunięto trwale: ${items.size}"
         }
     }
-    fun compress(name: String, items: List<Item> = selectedItems) {
+    fun compress(name: String, items: List<Item> = selectedItems, format: ArchiveFormat = ArchiveFormat.ZIP, password: String? = null) {
         val p = place ?: items.firstOrNull()?.place?.parent() ?: return
         longOperation("Pakowanie do $name") { report ->
             val total = withContext(Dispatchers.IO) { files.measure(items) { cancelRequested } }.bytes
-            val zip = withContext(Dispatchers.IO) { files.compress(items, p, name, { cancelRequested }) { n, b -> report(n, b, total) } }
+            val zip = withContext(Dispatchers.IO) { archives.compress(items, p, name, format, password, { cancelRequested }) { n, b -> report(n, b, total) } }
             selected = emptySet(); refresh(); notice = "Utworzono ${zip.parts.last()}"
         }
     }
-    fun extract(item: Item) {
-        val p = item.place.parent() ?: return
+    /** Podgląd archiwum; zabezpieczone hasłem – najpierw prośba o hasło. */
+    fun openArchive(item: Item, password: String? = null) = operation("Czytanie archiwum") {
+        try { archive = ArchiveState(item, withContext(Dispatchers.IO) { archives.entries(item, password) }, password); passwordPrompt = null }
+        catch (e: PasswordNeeded) { passwordPrompt = PasswordPrompt(item, false, password != null) }
+    }
+    fun submitPassword(password: String) {
+        val p = passwordPrompt ?: return
+        passwordPrompt = null
+        if (p.extract) extract(p.item, password) else openArchive(p.item, password)
+    }
+    fun extract(item: Item, password: String? = archive?.takeIf { it.item == item }?.password) {
+        val p = extractTarget(item) ?: return
         archive = null
         longOperation("Rozpakowywanie ${item.name}") { report ->
-            val folder = withContext(Dispatchers.IO) { files.extract(item, p, { cancelRequested }) { n, b -> report(n, b, 0) } }
+            val folder = try { withContext(Dispatchers.IO) { archives.extract(item, p, password, { cancelRequested }) { n, b -> report(n, b, 0) } } }
+            catch (e: PasswordNeeded) { passwordPrompt = PasswordPrompt(item, true, password != null); return@longOperation }
             tree.clear()
             if (place == p) refresh()
             notice = "Rozpakowano do ${folder.parts.last()}"
@@ -512,7 +656,7 @@ class ExplorerModel(app: Application) : AndroidViewModel(app) {
                         info += "Zainstalowana" to (installed?.versionName ?: "nie")
                     }
                 }
-                if (FileRules.isZip(item)) runCatching { files.zipEntries(item, 10_000) }.onSuccess { list -> info += "Archiwum" to "${list.count { !it.first.endsWith('/') }} plików, rozpakowane ${formatSize(list.sumOf { it.second.coerceAtLeast(0) })}" }
+                if (FileRules.isArchive(item)) runCatching { archives.entries(item, null, 10_000) }.onSuccess { list -> info += "Archiwum" to "${list.count { !it.first.endsWith('/') }} plików, rozpakowane ${formatSize(list.sumOf { it.second.coerceAtLeast(0) })}" }
                 Details(item, info, if (FileRules.isMedia(item)) runCatching { item.imageModel() ?: files.uri(item) }.getOrNull() else null)
             }
             details = result
@@ -530,12 +674,13 @@ class ExplorerModel(app: Application) : AndroidViewModel(app) {
     fun open(item: Item) {
         when {
             item.directory -> navigate(item.place)
+            external is ExternalRequest.Pick -> pickItems(listOf(item))
             FileRules.isMedia(item) && item.localUri != null -> {
                 val media = visible.filter { FileRules.isMedia(it) && it.localUri != null }.ifEmpty { listOf(item) }
                 viewer = media to media.indexOfFirst { it.place == item.place }.coerceAtLeast(0)
             }
             FileRules.isText(item) && item.size <= 2 * 1024 * 1024 -> openEditor(item)
-            FileRules.isZip(item) -> operation("Czytanie archiwum") { archive = ArchiveState(item, withContext(Dispatchers.IO) { files.zipEntries(item) }) }
+            FileRules.isArchive(item) -> openArchive(item)
             else -> openExternal(item)
         }
     }
@@ -793,6 +938,130 @@ class ExplorerModel(app: Application) : AndroidViewModel(app) {
     }
     fun closeAnalysis() { analysisJob?.cancel(); analysis = null }
 
+    // ——— Blokada i folder prywatny ———
+    var appLock by mutableStateOf(prefs.flag("appLock", false)); private set
+    var vaultEnabled by mutableStateOf(prefs.flag("vaultEnabled", false)); private set
+    fun updateAppLock(v: Boolean) { appLock = v; prefs.setFlag("appLock", v) }
+    fun updateVaultEnabled(v: Boolean) { vaultEnabled = v; prefs.setFlag("vaultEnabled", v); if (!v) closeVault() }
+    /** Wywoływane po udanym uwierzytelnieniu. */
+    fun openVault() { vaultOpen = true; openShortcut(Place(Vault.ROOT_ID)) }
+    /** Zamyka folder prywatny: karty z nim znikają, schowek i zaznaczenie z jego plikami są czyszczone. */
+    fun closeVault() {
+        if (!vaultOpen) return
+        if (clipboard?.items?.any { it.place.root == Vault.ROOT_ID } == true) clipboard = null
+        if (viewer?.first?.any { it.place.root == Vault.ROOT_ID } == true) viewer = null
+        if (editor?.item?.place?.root == Vault.ROOT_ID) editor = null
+        if (details?.item?.place?.root == Vault.ROOT_ID) details = null
+        val open = tabs.filterNot { it.place.root == Vault.ROOT_ID }
+        if (open.size != tabs.size) {
+            tabs = open; active = active.coerceIn(0, (tabs.size - 1).coerceAtLeast(0)); saveTabs()
+            if (tabs.isEmpty() && view == View.Browse) view = View.Home
+            resetListing(); refresh()
+        }
+        vaultOpen = false
+    }
+
+    // ——— Aplikacje ———
+    var appsEnabled by mutableStateOf(prefs.flag("appsEnabled", true)); private set
+    fun updateAppsEnabled(v: Boolean) { appsEnabled = v; prefs.setFlag("appsEnabled", v); if (!v && view == View.Apps) goHome() }
+    var apps by mutableStateOf<List<AppInfo>>(emptyList()); private set
+    var showSystemApps by mutableStateOf(false)
+    fun openApps() { view = View.Apps; resetListing(); refresh() }
+    /** Kopia APK do Pobrane/APK; pakiet dzielony – wszystkie części w archiwum .apks (ZIP). */
+    fun backupApk(app: AppInfo) {
+        if (!access) { error = "Kopia APK wymaga pełnego dostępu do plików"; return }
+        longOperation("Kopia ${app.label}") { report ->
+            val saved = withContext(Dispatchers.IO) {
+                val download = Place(StorageAccess.INTERNAL_ID, listOf("Download"))
+                val folder = download.child("APK")
+                if (!files.exists(folder)) files.mkdir(download, "APK")
+                val parts = InstalledApps.apkFiles(context, app.packageName)
+                val base = FileRules.sanitize("${app.label} ${app.version}".trim())
+                if (parts.size == 1) parts[0].inputStream().use { files.receive(it, folder, "$base.apk", { cancelRequested }) { n, b -> report(n, b, app.apkSize) } }
+                else files.create(folder, "$base.apks") { out ->
+                    java.util.zip.ZipOutputStream(out).use { zip ->
+                        parts.forEach { f -> zip.putNextEntry(java.util.zip.ZipEntry(f.name)); f.inputStream().use { files.copyStream(it, zip, f.name, { cancelRequested }) { n, b -> report(n, b, app.apkSize) } }; zip.closeEntry() }
+                    }
+                }
+            }
+            notice = "Zapisano w Pobrane/APK: ${saved.parts.last()}"
+        }
+    }
+    fun uninstall(app: AppInfo) {
+        runCatching { context.startActivity(Intent(Intent.ACTION_DELETE, Uri.parse("package:${app.packageName}")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.onFailure { error = it.message }
+    }
+    fun appDetails(app: AppInfo) {
+        runCatching { context.startActivity(Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${app.packageName}")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+    }
+    fun launchApp(app: AppInfo) {
+        val intent = context.packageManager.getLaunchIntentForPackage(app.packageName) ?: run { notice = "Ta aplikacja nie ma ekranu startowego"; return }
+        context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
+
+    // ——— Porządki: duplikaty i zbędne pliki ———
+    var duplicates by mutableStateOf<List<DuplicateGroup>?>(null); private set
+    var junk by mutableStateOf<List<CleanupGroup>?>(null); private set
+    var cleanupStatus by mutableStateOf<String?>(null); private set
+    private var cleanupJob: Job? = null
+    fun openCleanup() { view = View.Cleanup; resetListing(); refresh() }
+    private fun internalBase() = roots.firstOrNull { it.id == StorageAccess.INTERNAL_ID }?.path?.let(::File)
+    fun scanDuplicates() {
+        val base = internalBase() ?: run { error = "Wyszukiwanie duplikatów wymaga pełnego dostępu do plików"; return }
+        cleanupJob?.cancel(); duplicates = null; cleanupStatus = "Szukanie duplikatów…"
+        cleanupJob = viewModelScope.launch {
+            try { duplicates = withContext(Dispatchers.IO) { StorageCleaner(base).duplicates(1024, { !isActive }) { t -> viewModelScope.launch { cleanupStatus = t } } } }
+            catch (e: CancellationException) { throw e } catch (e: Exception) { error = e.message }
+            finally { cleanupStatus = null }
+        }
+    }
+    fun scanJunk() {
+        val base = internalBase() ?: run { error = "Porządki wymagają pełnego dostępu do plików"; return }
+        cleanupJob?.cancel(); junk = null; cleanupStatus = "Szukanie zbędnych plików…"
+        cleanupJob = viewModelScope.launch {
+            try { junk = withContext(Dispatchers.IO) { StorageCleaner(base).junk { !isActive } } }
+            catch (e: CancellationException) { throw e } catch (e: Exception) { error = e.message }
+            finally { cleanupStatus = null }
+        }
+    }
+    fun stopCleanupScan() { cleanupJob?.cancel(); cleanupStatus = null }
+    /** Usuwa wskazane pliki – do kosza, jeśli włączony; puste foldery zawsze trwale. */
+    fun cleanFiles(list: List<File>) {
+        if (list.isEmpty()) return
+        longOperation("Porządkowanie ${list.size} elem.") { report ->
+            val trashed = mutableListOf<TrashEntry>()
+            var bytes = 0L
+            withContext(Dispatchers.IO) {
+                list.forEach { f ->
+                    if (cancelRequested) throw CancellationException("Anulowano")
+                    report(f.name, 1, list.size.toLong())
+                    val size = if (f.isFile) f.length() else 0L
+                    if (useTrash && f.isFile && trash.supports(f)) trashed += trash.put(f) else if (!f.deleteRecursively()) error("Nie udało się usunąć ${f.name}")
+                    bytes += size
+                }
+            }
+            val removed = list.toSet()
+            duplicates = duplicates?.map { g -> g.copy(files = g.files - removed) }?.filter { it.files.size > 1 }
+            junk = junk?.map { g -> g.copy(files = g.files - removed) }?.filter { it.files.isNotEmpty() }
+            val message = "Zwolniono ${formatSize(bytes)}"
+            if (trashed.isNotEmpty()) offerUndo("$message (w koszu)") { trashed.forEach { trash.restore(it) } } else notice = message
+        }
+    }
+
+    // ——— Serwer Wi-Fi ———
+    var wifiServer by mutableStateOf<WifiServer?>(null); private set
+    var wifiAddress by mutableStateOf<String?>(null); private set
+    fun startWifiServer() {
+        if (wifiServer != null) return
+        if (!access) { error = "Serwer udostępnia pamięć wewnętrzną – najpierw nadaj pełny dostęp do plików"; return }
+        val ip = WifiServer.address(context) ?: run { error = "Brak połączenia z siecią Wi-Fi"; return }
+        val server = WifiServer(files, StorageAccess.INTERNAL_ID) { viewModelScope.launch { if (view == View.Browse) refresh() } }
+        try { server.start() } catch (e: Exception) { error = "Nie można uruchomić serwera: ${e.message}"; return }
+        wifiServer = server
+        wifiAddress = "http://$ip:${server.port}/?t=${server.token}"
+    }
+    fun stopWifiServer() { wifiServer?.stop(); wifiServer = null; wifiAddress = null }
+    override fun onCleared() { wifiServer?.stop(); super.onCleared() }
+
     // ——— Skróty na ekranie głównym ———
     fun pinShortcut(p: Place) {
         val intent = Intent(context, MainActivity::class.java).setAction(MainActivity.ACTION_OPEN_FOLDER)
@@ -805,7 +1074,7 @@ class ExplorerModel(app: Application) : AndroidViewModel(app) {
         else notice = "Ekran główny nie obsługuje skrótów"
     }
     fun openShortcut(p: Place) {
-        if (roots.none { it.id == p.root }) { error = "Źródło skrótu nie jest już dostępne"; return }
+        if (allRoots.none { it.id == p.root }) { error = "Źródło skrótu nie jest już dostępne"; return }
         val existing = tabs.indexOfFirst { it.place == p }
         if (existing >= 0) switch(existing) else navigate(p, tabs.isNotEmpty())
     }

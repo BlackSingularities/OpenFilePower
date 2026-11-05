@@ -375,8 +375,8 @@ class BrowserActions(
                 if (single != null) MenuRow(Icons.Rounded.Edit, "Zmień nazwę") { menu = false; actions.rename(single) }
                 if (items.size > 1) MenuRow(Icons.Rounded.DriveFileRenameOutline, "Zmień nazwy (${items.size})") { menu = false; actions.batchRename() }
                 if (single != null && single.directory) MenuRow(Icons.Rounded.AddToHomeScreen, "Skrót na ekranie głównym") { menu = false; vm.pinShortcut(single.place) }
-                MenuRow(Icons.Rounded.Archive, "Spakuj do ZIP") { menu = false; actions.compress() }
-                if (single != null && FileRules.isZip(single)) MenuRow(Icons.Rounded.Unarchive, "Rozpakuj") { menu = false; vm.clearSelection(); vm.extract(single) }
+                MenuRow(Icons.Rounded.Archive, "Spakuj…") { menu = false; actions.compress() }
+                if (single != null && FileRules.isArchive(single)) MenuRow(Icons.Rounded.Unarchive, "Rozpakuj") { menu = false; vm.clearSelection(); vm.extract(single) }
                 if (single != null) MenuRow(Icons.Rounded.Info, "Właściwości") { menu = false; actions.inspect(single) }
                 if (single != null && !single.directory) MenuRow(Icons.AutoMirrored.Rounded.OpenInNew, "Otwórz za pomocą…") { menu = false; vm.openExternal(single, true) }
                 if (single != null) MenuRow(Icons.Rounded.Link, "Kopiuj ścieżkę") { menu = false; vm.copyPath(single) }
@@ -434,7 +434,7 @@ class BrowserActions(
                         }
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
-                            Text(e.name, fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            RawText(e.name, fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Text("${formatShortDate(e.deleted)} · ${formatSize(e.size)} · ${e.original.substringBeforeLast('/')}", fontSize = 11.sp, color = Palette.TextDim, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                         RoundIcon(Icons.Rounded.Restore, "Przywróć ${e.name}", size = 38.dp, flat = true, enabled = !vm.busy) { vm.restore(e) }

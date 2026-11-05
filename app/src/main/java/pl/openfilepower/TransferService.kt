@@ -36,12 +36,12 @@ class TransferService : Service() {
         private const val ID = 7301
         private const val EXTRA_TITLE = "title"
         private fun channel(context: Context) {
-            context.getSystemService(NotificationManager::class.java)?.createNotificationChannel(NotificationChannel(CHANNEL, "Operacje na plikach", NotificationManager.IMPORTANCE_LOW))
+            context.getSystemService(NotificationManager::class.java)?.createNotificationChannel(NotificationChannel(CHANNEL, pl.openfilepower.ui.tr("Operacje na plikach"), NotificationManager.IMPORTANCE_LOW))
         }
         private fun build(context: Context, title: String, text: String, percent: Int): Notification {
             channel(context)
             val open = PendingIntent.getActivity(context, 0, Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP), PendingIntent.FLAG_IMMUTABLE)
-            return Notification.Builder(context, CHANNEL).setSmallIcon(R.drawable.ic_stat_transfer).setContentTitle(title).setContentText(text)
+            return Notification.Builder(context, CHANNEL).setSmallIcon(R.drawable.ic_stat_transfer).setContentTitle(pl.openfilepower.ui.tr(title)).setContentText(pl.openfilepower.ui.tr(text))
                 .setOngoing(true).setOnlyAlertOnce(true).setContentIntent(open).setCategory(Notification.CATEGORY_PROGRESS)
                 .apply { if (percent >= 0) setProgress(100, percent, false) else setProgress(0, 0, true) }.build()
         }

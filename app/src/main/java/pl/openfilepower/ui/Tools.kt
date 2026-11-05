@@ -10,7 +10,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -120,8 +119,8 @@ enum class RenameMode(val label: String) { PATTERN("Wzorzec"), REPLACE("Zamień"
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Palette.Card).padding(vertical = 4.dp)) {
             result.take(12).forEach { (item, name) ->
                 Column(Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) {
-                    Text(item.name, fontSize = 11.sp, color = Palette.TextFaint, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(name, fontSize = 13.sp, color = if (runCatching { FileRules.validateName(name) }.isSuccess) Palette.White else Palette.Record, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    RawText(item.name, fontSize = 11.sp, color = Palette.TextFaint, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    RawText(name, fontSize = 13.sp, color = if (runCatching { FileRules.validateName(name) }.isSuccess) Palette.White else Palette.Record, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
             if (result.size > 12) Text("… i ${result.size - 12} więcej", fontSize = 11.sp, color = Palette.TextDim, modifier = Modifier.padding(12.dp))
@@ -149,7 +148,7 @@ enum class RenameMode(val label: String) { PATTERN("Wzorzec"), REPLACE("Zamień"
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(iconFor(item), null, Modifier.size(18.dp), tint = Palette.TextDim)
                         Spacer(Modifier.width(8.dp))
-                        Text(item.name, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                        RawText(item.name, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                         Text(formatSize(size), fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         Text(" ${(size * 100 / total)}%", fontSize = 11.sp, color = Palette.TextDim, modifier = Modifier.width(40.dp))
                     }
@@ -161,3 +160,68 @@ enum class RenameMode(val label: String) { PATTERN("Wzorzec"), REPLACE("Zamień"
     }
 }
 
+
+/** Połączenie z serwerem SFTP, FTP/FTPS albo WebDAV (np. Nextcloud). */
+@Composable fun RemotePanel(vm: ExplorerModel, dismiss: () -> Unit) {
+    var protocol by remember { mutableStateOf(RemoteProtocol.SFTP) }
+    var host by remember { mutableStateOf("") }; var port by remember { mutableStateOf("") }; var path by remember { mutableStateOf("") }
+    var user by remember { mutableStateOf("") }; var pass by remember { mutableStateOf("") }; var name by remember { mutableStateOf("") }
+    Panel("Serwer SFTP, FTP lub WebDAV", { dismiss() }) {
+        Group("Protokół") {
+            Column(Modifier.padding(12.dp)) { FlowRowCompat { RemoteProtocol.entries.forEach { p -> Chip(p.label, protocol == p) { protocol = p } } } }
+        }
+        Group("Serwer i logowanie") {
+            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                DarkField(host, { host = it.trim() }, "Serwer, np. 192.168.1.10 lub cloud.example.com", leading = Icons.Rounded.Dns)
+                DarkField(port, { port = it.filter(Char::isDigit).take(5) }, "Port (domyślnie ${protocol.port})")
+                DarkField(path, { path = it }, if (protocol == RemoteProtocol.WEBDAV || protocol == RemoteProtocol.WEBDAVS) "Ścieżka, np. remote.php/dav/files/jan" else "Folder startowy (opcjonalnie)", leading = Icons.Rounded.Folder)
+                DarkField(user, { user = it }, if (protocol == RemoteProtocol.FTP || protocol == RemoteProtocol.FTPS) "Użytkownik (puste = anonimowo)" else "Użytkownik", leading = Icons.Rounded.Person)
+                DarkField(pass, { pass = it }, "Hasło", password = true, leading = Icons.Rounded.Lock)
+                DarkField(name, { name = it }, "Nazwa połączenia (opcjonalnie)")
+            }
+        }
+        val note = when (protocol) {
+            RemoteProtocol.SFTP -> "Odcisk klucza serwera zostanie zapamiętany przy pierwszym połączeniu; jego zmiana zablokuje połączenie."
+            RemoteProtocol.FTP -> "Zwykły FTP przesyła hasło bez szyfrowania – używaj go tylko w zaufanej sieci."
+            RemoteProtocol.WEBDAV -> "WebDAV przez HTTP przesyła hasło bez szyfrowania – wybierz HTTPS, jeśli serwer go obsługuje."
+            else -> "Połączenie szyfrowane TLS."
+        }
+        Text("$note Połączenie zostanie sprawdzone przed zapisaniem; hasło jest szyfrowane kluczem Android Keystore.", color = Palette.TextFaint, fontSize = 11.sp, modifier = Modifier.padding(horizontal = 4.dp))
+        Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
+            PillButton("Anuluj", primary = false, onClick = dismiss)
+            PillButton("Połącz", enabled = host.isNotBlank() && !vm.busy, icon = Icons.Rounded.Link) {
+                vm.addRemote(protocol, host, port.toIntOrNull() ?: protocol.port, path, user, pass, name) { dismiss() }
+            }
+        }
+        Spacer(Modifier.height(24.dp))
+    }
+}
+
+/** Serwer WWW w sieci Wi-Fi: adres do wpisania w przeglądarce komputera. */
+@Composable fun WifiServerPanel(vm: ExplorerModel, dismiss: () -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    Panel("Przesyłanie przez Wi-Fi", { dismiss() }) {
+        Group(null) {
+            Column(Modifier.fillMaxWidth().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Icon(if (vm.wifiServer != null) Icons.Rounded.Wifi else Icons.Rounded.WifiOff, null, Modifier.size(44.dp))
+                val address = vm.wifiAddress
+                if (address != null) {
+                    Text("Wpisz w przeglądarce komputera w tej samej sieci:", color = Palette.TextDim, fontSize = 13.sp)
+                    androidx.compose.foundation.text.selection.SelectionContainer { Text(address, fontSize = 17.sp, fontWeight = FontWeight.Bold, textAlign = androidx.compose.ui.text.style.TextAlign.Center) }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        PillButton("Kopiuj adres", primary = false, icon = Icons.Rounded.ContentCopy) {
+                            context.getSystemService(android.content.ClipboardManager::class.java)?.setPrimaryClip(android.content.ClipData.newPlainText("Adres", address)); vm.notice = "Skopiowano adres"
+                        }
+                        PillButton("Zatrzymaj", danger = true, icon = Icons.Rounded.Stop) { vm.stopWifiServer() }
+                    }
+                } else {
+                    Text("Przeglądaj, pobieraj i wysyłaj pliki pamięci telefonu z przeglądarki komputera – bez kabla i bez instalowania czegokolwiek.", color = Palette.TextDim, fontSize = 13.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                    PillButton("Uruchom serwer", icon = Icons.Rounded.PlayArrow, enabled = vm.access) { vm.startWifiServer() }
+                    if (!vm.access) Text("Wymaga pełnego dostępu do plików.", color = Palette.Record, fontSize = 12.sp)
+                }
+            }
+        }
+        Text("Adres zawiera losowy klucz zmieniany przy każdym uruchomieniu – bez niego nikt w sieci nie zobaczy plików. Połączenie nie jest szyfrowane, więc używaj go w domowej sieci. Serwer działa, dopóki aplikacja jest otwarta.", color = Palette.TextFaint, fontSize = 11.sp, modifier = Modifier.padding(horizontal = 4.dp))
+        Spacer(Modifier.height(24.dp))
+    }
+}

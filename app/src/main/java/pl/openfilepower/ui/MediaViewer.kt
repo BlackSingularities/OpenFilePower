@@ -30,7 +30,6 @@ import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -45,6 +44,7 @@ import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -153,7 +153,7 @@ private fun analyze(bitmap: Bitmap): Analysis {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     RoundIcon(Icons.AutoMirrored.Rounded.ArrowBack, "Zamknij podgląd", onClick = close)
                     Column(Modifier.weight(1f).padding(start = 4.dp)) {
-                        Text(current.name, fontWeight = FontWeight.Bold, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        RawText(current.name, fontWeight = FontWeight.Bold, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text("${pager.currentPage + 1} z ${media.size} · ${formatSize(current.size)} · ${formatShortDate(current.modified)}", fontSize = 11.sp, color = Palette.TextDim, maxLines = 1)
                     }
                     var menu by remember { mutableStateOf(false) }
@@ -203,7 +203,7 @@ private fun analyze(bitmap: Bitmap): Analysis {
 
 /** Karta parametrów zdjęcia: aparat i obiektyw, a pod nimi ekspozycja w kafelkach z ikonami. */
 @Composable private fun ExifStrip(e: PhotoExif, item: Item) {
-    Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp).clip(RoundedCornerShape(18.dp)).background(Color.Black.copy(alpha = 0.72f)).padding(horizontal = 14.dp, vertical = 10.dp)) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp).clip(RoundedCornerShape(18.dp)).background(Color.Black.copy(alpha = 0.72f)).padding(horizontal = 14.dp, vertical = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Rounded.PhotoCamera, null, Modifier.size(16.dp), tint = Palette.TextDim)
             Spacer(Modifier.width(8.dp))
@@ -211,7 +211,7 @@ private fun analyze(bitmap: Bitmap): Analysis {
             if (FileRules.isRaw(item)) Text("RAW", fontSize = 9.sp, fontWeight = FontWeight.Black, color = Palette.Ink, modifier = Modifier.padding(start = 8.dp).clip(Pill).background(Palette.White).padding(horizontal = 6.dp, vertical = 1.dp))
             e.megapixels?.let { Text("  $it", fontSize = 11.sp, color = Palette.TextDim) }
         }
-        e.lens?.let { Text(it, fontSize = 11.sp, color = Palette.TextDim, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 24.dp)) }
+        e.lens?.let { Text(it, fontSize = 11.sp, color = Palette.TextDim, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center) }
         val tiles = listOfNotNull(
             e.aperture?.let { Triple(Icons.Rounded.Camera, it, "Przysłona") },
             e.shutter?.let { Triple(Icons.Rounded.ShutterSpeed, it, "Czas") },
@@ -223,7 +223,7 @@ private fun analyze(bitmap: Bitmap): Analysis {
         )
         if (tiles.isNotEmpty()) Row(Modifier.padding(top = 8.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             tiles.forEach { (icon, value, label) ->
-                Column(Modifier.clip(RoundedCornerShape(12.dp)).background(Color.White.copy(alpha = 0.1f)).padding(horizontal = 10.dp, vertical = 6.dp)) {
+                Column(Modifier.clip(RoundedCornerShape(12.dp)).background(Color.White.copy(alpha = 0.1f)).padding(horizontal = 10.dp, vertical = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(icon, null, Modifier.size(14.dp), tint = Color.White)
                         Spacer(Modifier.width(5.dp))

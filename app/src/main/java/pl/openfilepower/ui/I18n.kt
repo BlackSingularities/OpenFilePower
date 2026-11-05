@@ -1,0 +1,837 @@
+package pl.openfilepower.ui
+
+import android.content.Context
+import androidx.compose.material3.LocalTextStyle
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.TextUnit
+import pl.openfilepower.Preferences
+
+enum class Language(val label: String) { AUTO("Automatycznie"), POLISH("Polski"), ENGLISH("English") }
+
+/**
+ * Tłumaczenie interfejsu: teksty w kodzie są po polsku, a w trybie angielskim każdy napis
+ * wyświetlany przez [Text] przechodzi przez słownik [tr]. Wzorce z „{}” pasują do tekstów z wartościami
+ * (np. „Skopiowano 3 elem.” → „Copied 3 items”).
+ */
+object I18n {
+    var language by mutableStateOf(Language.AUTO); private set
+    val english get() = when (language) { Language.ENGLISH -> true; Language.POLISH -> false; Language.AUTO -> java.util.Locale.getDefault().language != "pl" }
+
+    fun load(context: Context) { language = runCatching { Language.valueOf(Preferences(context).text("language", Language.AUTO.name)) }.getOrDefault(Language.AUTO) }
+    fun set(context: Context, value: Language) { language = value; Preferences(context).setText("language", value.name) }
+
+    private val exact = HashMap<String, String>()
+    private val upper = HashMap<String, String>()
+    private val templates = mutableListOf<Pair<Regex, String>>()
+    init {
+        DICTIONARY.lineSequence().map { it.trim() }.filter { it.contains(" => ") }.forEach { line ->
+            val pl = line.substringBefore(" => "); val en = line.substringAfter(" => ")
+            if (pl.contains("{}")) {
+                val pattern = pl.split("{}").joinToString("(.+?)") { Regex.escape(it) }
+                templates += Regex("^$pattern$", RegexOption.DOT_MATCHES_ALL) to en
+            } else { exact[pl] = en; upper[pl.uppercase()] = en.uppercase() }
+        }
+        // Najpierw wzorce z najdłuższą stałą częścią – „Folder · {} elem.” przed „Folder {}”.
+        templates.sortByDescending { it.first.pattern.replace("(.+?)", "").length }
+    }
+
+    private fun simple(text: String): String? = exact[text] ?: upper[text]
+    private fun one(text: String): String? {
+        simple(text)?.let { return it }
+        for ((regex, en) in templates) {
+            val m = regex.find(text) ?: continue
+            val values = m.groupValues.drop(1).map { simple(it) ?: simple(it.trim())?.let { t -> it.replace(it.trim(), t) } ?: it }
+            var i = 0
+            return Regex("\\{(\\d?)\\}").replace(en) { r -> val n = r.groupValues[1].toIntOrNull(); values.getOrElse(if (n != null) n - 1 else i++) { "" } }
+        }
+        return null
+    }
+    /** Tłumaczy tekst interfejsu; nieznane teksty (np. nazwy plików) zostają bez zmian. */
+    fun tr(text: String): String {
+        if (!english || text.isBlank()) return text
+        one(text)?.let { return it }
+        // Teksty złożone: „część · część” i wiele wierszy.
+        if (text.contains('\n')) return text.split('\n').joinToString("\n") { tr(it) }
+        if (text.contains(" · ")) return text.split(" · ").joinToString(" · ") { one(it) ?: it }
+        if (text.startsWith("• ")) return "• " + tr(text.removePrefix("• "))
+        return text
+    }
+}
+
+fun tr(text: String) = I18n.tr(text)
+
+/** Zastępuje Text z Material 3 w całym pakiecie interfejsu – każdy napis przechodzi przez tłumaczenie. */
+@Composable fun Text(
+    text: String, modifier: Modifier = Modifier, color: Color = Color.Unspecified, fontSize: TextUnit = TextUnit.Unspecified,
+    fontStyle: FontStyle? = null, fontWeight: FontWeight? = null, fontFamily: FontFamily? = null, letterSpacing: TextUnit = TextUnit.Unspecified,
+    textDecoration: TextDecoration? = null, textAlign: TextAlign? = null, lineHeight: TextUnit = TextUnit.Unspecified, overflow: TextOverflow = TextOverflow.Clip,
+    softWrap: Boolean = true, maxLines: Int = Int.MAX_VALUE, minLines: Int = 1, onTextLayout: ((TextLayoutResult) -> Unit)? = null, style: TextStyle = LocalTextStyle.current,
+) = androidx.compose.material3.Text(
+    text = I18n.tr(text), modifier = modifier, color = color, fontSize = fontSize, fontStyle = fontStyle, fontWeight = fontWeight, fontFamily = fontFamily,
+    letterSpacing = letterSpacing, textDecoration = textDecoration, textAlign = textAlign, lineHeight = lineHeight, overflow = overflow, softWrap = softWrap,
+    maxLines = maxLines, minLines = minLines, onTextLayout = onTextLayout, style = style,
+)
+
+/** Nazwy plików i folderów – nigdy nie tłumaczone. */
+@Composable fun RawText(
+    text: String, modifier: Modifier = Modifier, color: Color = Color.Unspecified, fontSize: TextUnit = TextUnit.Unspecified,
+    fontWeight: FontWeight? = null, textAlign: TextAlign? = null, lineHeight: TextUnit = TextUnit.Unspecified, overflow: TextOverflow = TextOverflow.Clip, maxLines: Int = Int.MAX_VALUE,
+) = androidx.compose.material3.Text(text = text, modifier = modifier, color = color, fontSize = fontSize, fontWeight = fontWeight, textAlign = textAlign, lineHeight = lineHeight, overflow = overflow, maxLines = maxLines)
+
+private const val DICTIONARY = """
+Archiwum jest zabezpieczone hasłem => The archive is password protected
+Nieobsługiwany format archiwum => Unsupported archive format
+Archiwum => Archive
+RAR 5 nie jest obsługiwany – rozpakuj go na komputerze lub zapisz jako RAR 4 / 7z => RAR 5 is not supported – extract it on a computer or save it as RAR 4 / 7z
+Nieprawidłowe hasło => Wrong password
+Anulowano => Cancelled
+Przejrzano {} plików => Scanned {} files
+Porównano {} z {} podejrzanych plików => Compared {} of {} candidate files
+Pliki instalacyjne APK => APK installation files
+Zwykle niepotrzebne po zainstalowaniu aplikacji => Usually not needed after the app is installed
+Pliki tymczasowe => Temporary files
+Niedokończone pobrania i pozostałości programów => Unfinished downloads and leftovers
+Logi => Logs
+Pliki .log zapisane przez aplikacje => .log files written by apps
+Miniatury galerii => Gallery thumbnails
+Podglądy w folderach .thumbnails – zostaną odtworzone => Previews in .thumbnails folders – they will be recreated
+Puste foldery => Empty folders
+Foldery bez żadnych plików => Folders without any files
+Wszystko => All
+Zdjęcia => Photos
+Wideo => Video
+Foldery => Folders
+Dokumenty => Documents
+Archiwa => Archives
+Nazwa => Name
+Rozmiar => Size
+Data => Date
+Typ => Type
+Ten plik nie pasuje do tego, o co prosi aplikacja => This file does not match what the app asked for
+Pobieranie z NAS => Downloading from NAS
+Anulowano pobieranie => Download cancelled
+Przygotowanie pliku => Preparing file
+Otwórz folder, w którym zapisać => Open the folder to save to
+Zapisywanie w {} => Saving to {}
+Nie można odczytać {} => Cannot read {}
+Zapisano {} elem. w {} => Saved {} items to {}
+Otwieranie {} => Opening {}
+Nadaj pełny dostęp do plików, aby rozpakować archiwum do folderu Pobrane => Grant full file access to extract the archive to the Download folder
+Aparat => Camera
+Obrazy => Pictures
+Pobrane => Downloads
+Muzyka => Music
+Filmy => Movies
+Nagrania => Recordings
+Łączenie z NAS => Connecting to NAS
+Podaj nazwę, adres serwera i udział => Enter a name, server address and share
+Podaj nazwę pojedynczego udziału => Enter the name of a single share
+Ten udział jest już dodany => This share is already added
+Połączono z NAS => Connected to NAS
+Łączenie z {} => Connecting to {}
+Podaj poprawny adres serwera => Enter a valid server address
+Nieprawidłowy port => Invalid port
+Ten serwer jest już dodany => This server is already added
+Połączono z {} => Connected to {}
+Proszę czekać => Please wait
+Nie można otworzyć folderu: {} => Cannot open folder: {}
+Znaleziono {} elementów => Found {} items
+Wycięto {} – przejdź do celu i wklej => Cut {} – go to the destination and paste
+Skopiowano {} – przejdź do celu i wklej => Copied {} – go to the destination and paste
+Sprawdzanie celu => Checking destination
+Przenoszenie => Moving
+Kopiowanie => Copying
+{} {} elem. do {} => {} {} items to {}
+Przeniesiono {} elem. => Moved {} items
+Skopiowano {} elem. => Copied {} items
+Tworzenie folderu => Creating folder
+Tworzenie pliku => Creating file
+Zmiana nazwy => Renaming
+Zmieniono nazwę na {} => Renamed to {}
+Cofanie => Undoing
+Cofnięto => Undone
+Cofnij => Undo
+Przenoszenie do kosza => Moving to trash
+Usuwanie {} elem. => Deleting {} items
+Przeniesiono do kosza: {} => Moved to trash: {}
+Usunięto trwale: {} => Permanently deleted: {}
+Pakowanie do {} => Compressing to {}
+Utworzono {} => Created {}
+Czytanie archiwum => Reading archive
+Rozpakowywanie {} => Extracting {}
+Rozpakowano do {} => Extracted to {}
+Ścieżka => Path
+Skopiowano ścieżkę => Path copied
+Przywracanie => Restoring
+Przywrócono {} => Restored {}
+Usuwanie => Deleting
+Opróżnianie kosza => Emptying trash
+Kosz opróżniony => Trash emptied
+Rodzaj => Kind
+Zmodyfikowano => Modified
+Lokalizacja => Location
+Zawartość => Contents
+{} plików, {} folderów => {} files, {} folders
+Brak EXIF => No EXIF
+Producent => Manufacturer
+Obiektyw => Lens
+Wykonano => Taken
+Wymiary => Dimensions
+Przysłona => Aperture
+Czas naświetlania => Shutter speed
+Ogniskowa => Focal length
+Korekta ekspozycji => Exposure compensation
+Lampa => Flash
+Balans bieli => White balance
+Oprogramowanie => Software
+Brak metadanych lub nieobsługiwany format => No metadata or unsupported format
+Aplikacja => App
+Pakiet => Package
+Wersja aplikacji => App version
+Zainstalowana => Installed
+nie => no
+{} plików, rozpakowane {} => {} files, {} extracted
+Liczenie {} => Computing {}
+Zapisywanie => Saving
+Zapisano {} => Saved {}
+Otwórz za pomocą => Open with
+Anulowano pobieranie {} => Cancelled downloading {}
+Otwieranie => Opening
+Foldery nie mogą być udostępniane – spakuj je do ZIP => Folders cannot be shared – compress them to ZIP
+Udostępnij => Share
+Pobieranie z NAS do udostępnienia => Downloading from NAS to share
+Przygotowanie do udostępnienia => Preparing to share
+Operacja nie powiodła się => Operation failed
+Anulowano – ukończone elementy pozostały w celu => Cancelled – completed items remain at the destination
+Wersja testowa nie aktualizuje się automatycznie => The test build does not update automatically
+Masz najnowszą wersję {} => You have the latest version {}
+Aktualizacje: {} => Updates: {}
+Czas trwania => Duration
+Rozdzielczość => Resolution
+Przepływność => Bitrate
+Tytuł => Title
+Wykonawca => Artist
+Rok => Year
+Wykrywanie NAS nie powiodło się: {}. Wpisz adres serwera ręcznie. => NAS discovery failed: {}. Enter the server address manually.
+Nie można pobrać listy udziałów z {}: {}. Sprawdź login i hasło. => Cannot list shares on {}: {}. Check the username and password.
+Zmiana nazw {} elem. => Renaming {} items
+Nowe nazwy powtarzają się => New names are not unique
+Zmieniono nazwy: {} => Renamed: {}
+Kopia APK wymaga pełnego dostępu do plików => APK backup requires full file access
+Kopia {} => Backing up {}
+Zapisano w Pobrane/APK: {} => Saved to Download/APK: {}
+Ta aplikacja nie ma ekranu startowego => This app has no launcher screen
+Wyszukiwanie duplikatów wymaga pełnego dostępu do plików => Finding duplicates requires full file access
+Szukanie duplikatów… => Looking for duplicates…
+Porządki wymagają pełnego dostępu do plików => Cleanup requires full file access
+Szukanie zbędnych plików… => Looking for unneeded files…
+Porządkowanie {} elem. => Cleaning up {} items
+Nie udało się usunąć {} => Could not delete {}
+Zwolniono {} => Freed {}
+{} (w koszu) => {} (in trash)
+Serwer udostępnia pamięć wewnętrzną – najpierw nadaj pełny dostęp do plików => The server shares internal storage – grant full file access first
+Brak połączenia z siecią Wi-Fi => No Wi-Fi connection
+Nie można uruchomić serwera: {} => Cannot start the server: {}
+Ekran główny nie obsługuje skrótów => The home screen does not support shortcuts
+Źródło skrótu nie jest już dostępne => The shortcut's source is no longer available
+Otwarte pliki => Opened files
+Przerwij => Abort
+Pomiń => Skip
+Zachowaj oba => Keep both
+Zastąp => Replace
+Niedozwolona nazwa pliku => Invalid file name
+Folder został odłączony => The folder was disconnected
+To nie jest folder lokalny => This is not a local folder
+Nieprawidłowy dostęp do folderu => Invalid folder access
+Brak dostępu do źródła. Podłącz urządzenie lub wybierz folder ponownie. => No access to the source. Connect the device or pick the folder again.
+Nie znaleziono: {} => Not found: {}
+Folder nie istnieje albo brak uprawnień: {} => Folder does not exist or no permission: {}
+Brak uprawnień do odczytu: {} => No read permission: {}
+Nie można odczytać pliku => Cannot read the file
+Nazwa już istnieje: {} => Name already exists: {}
+Nie można utworzyć folderu {} => Cannot create folder {}
+Nie można zmienić nazwy źródła => Cannot rename a source
+Nazwa już istnieje => Name already exists
+Zmiana nazwy nie powiodła się => Rename failed
+Nie można usunąć źródła => Cannot delete a source
+Plik już istnieje: {} => File already exists: {}
+Plik już istnieje lub brak uprawnień: {} => File already exists or no permission: {}
+Nie można utworzyć {} => Cannot create {}
+Nie można zapisać {} => Cannot save {}
+Nie można zapisać pliku => Cannot save the file
+Rozmiar źródła zmienił się podczas kopiowania: {} => Source size changed while copying: {}
+Nie udało się zapisać {} => Could not save {}
+Plik jest za duży do edycji (limit {}) => The file is too large to edit (limit {})
+Plik jest za duży do edycji => The file is too large to edit
+To nie jest plik tekstowy => This is not a text file
+Nie można kopiować folderu do niego samego ani jego podfolderu => Cannot copy a folder into itself or its subfolder
+W folderze docelowym istnieje już {}. Zmień nazwę lub wybierz inny folder. => {} already exists in the destination. Rename it or choose another folder.
+Anulowano transfer => Transfer cancelled
+W folderze docelowym istnieje już {} => {} already exists in the destination
+Archiwum zawiera niebezpieczną ścieżkę: {} => The archive contains an unsafe path: {}
+Manualny => Manual
+Priorytet przysłony => Aperture priority
+Priorytet migawki => Shutter priority
+Kreatywny => Creative
+Portret => Portrait
+Krajobraz => Landscape
+Błysk => Flash
+Bez błysku => No flash
+Automatyczny => Auto
+Ręczny => Manual
+Plik RAW nie zawiera osadzonego podglądu => The RAW file has no embedded preview
+Nie można otworzyć pliku => Cannot open the file
+Nieobsługiwany adres: {} => Unsupported address: {}
+Klucz serwera {} zmienił się ({}). Połączenie przerwane – usuń i dodaj serwer ponownie, jeśli zmiana jest zamierzona. => The host key of {} has changed ({}). Connection aborted – remove and re-add the server if the change is expected.
+Serwer FTP odrzucił połączenie: {} => The FTP server refused the connection: {}
+Nieprawidłowy login lub hasło FTP => Wrong FTP username or password
+Nie można pobrać: {} => Cannot download: {}
+Nie można zapisać: {} => Cannot save: {}
+Zapis nie powiódł się: {} => Write failed: {}
+Nie można utworzyć folderu => Cannot create the folder
+Nie można usunąć folderu => Cannot delete the folder
+Nie można usunąć pliku => Cannot delete the file
+Brak dostępu (HTTP {}) – sprawdź login i hasło => Access denied (HTTP {}) – check the username and password
+Nie znaleziono (HTTP 404) => Not found (HTTP 404)
+Element już istnieje lub operacja niedozwolona (HTTP 405) => Item already exists or operation not allowed (HTTP 405)
+Serwer WebDAV zwrócił błąd HTTP {} => The WebDAV server returned HTTP error {}
+Folder nie istnieje => The folder does not exist
+Ustaw na urządzeniu odcisk palca lub blokadę ekranu (PIN, wzór, hasło) => Set up a fingerprint or screen lock (PIN, pattern, password) on the device
+Folder prywatny => Private folder
+Pamięć wewnętrzna => Internal storage
+Karta SD => SD card
+Aplikacje => Apps
+Duże pliki => Large files
+Kosz działa tylko w pamięci wewnętrznej => Trash works only in internal storage
+Nie udało się przenieść do kosza: {} => Could not move to trash: {}
+Nie udało się przywrócić {} => Could not restore {}
+Folder nie istnieje: {} => Folder does not exist: {}
+Plik zniknął => The file disappeared
+W miejscu folderu jest plik: {} => There is a file where a folder should be: {}
+Nie udało się utworzyć folderu {} => Could not create folder {}
+Nie znaleziono {} => Not found {}
+Nie udało się zmienić nazwy {} => Could not rename {}
+Folder na telefonie jest niedostępny => The phone folder is unavailable
+Dysk jest niedostępny – sprawdź połączenie z siecią lub podłącz nośnik => The drive is unavailable – check the network or connect the storage
+Łączenie… => Connecting…
+Dysk niedostępny – pliki na telefonie są dostępne, zmiany wyślą się po połączeniu => Drive unavailable – files on the phone are available, changes will be sent when connected
+Wstrzymano – wymaga potwierdzenia => Paused – needs confirmation
+Wstrzymano: {} => Paused: {}
+Część plików nie została zsynchronizowana => Some files were not synchronized
+Przerwano – zostanie dokończone przy następnej synchronizacji => Interrupted – will finish on the next sync
+po połączeniu z siecią => after connecting to the network
+po otwarciu aplikacji => after opening the app
+Podaj nazwę => Enter a name
+Foldery nie mogą być jeden w drugim => Folders cannot be inside each other
+Usunięto parę „{}” – pliki pozostały bez zmian => Removed pair “{}” – files were left unchanged
+ręcznie => manually
+Synchronizacja {} => Synchronizing {}
+Synchronizacja przerwana – dokończy się następnym razem => Sync interrupted – it will finish next time
+Nie można porównać folderów => Cannot compare the folders
+rozstrzygnięcie konfliktów => conflict resolution
+ręcznie, po potwierdzeniu => manually, after confirmation
+Wstrzymano przez użytkownika => Paused by the user
+Dwukierunkowa => Two-way
+Zmiany z telefonu i z dysku przenoszone są na drugą stronę => Changes on the phone and on the drive are copied to the other side
+Telefon → dysk => Phone → drive
+Kopia zapasowa: zmiany z telefonu trafiają na dysk, dysk nie zmienia telefonu => Backup: changes on the phone go to the drive, the drive never changes the phone
+Dysk → telefon => Drive → phone
+Kopia lokalna: zmiany z dysku trafiają na telefon, telefon nie zmienia dysku => Local copy: changes on the drive go to the phone, the phone never changes the drive
+Pytaj => Ask
+Konflikt czeka na decyzję, pozostałe pliki synchronizują się normalnie => The conflict waits for a decision, other files sync normally
+Zachowaj obie => Keep both
+Starsza wersja zostaje obok jako „nazwa (konflikt – …)” => The older version is kept alongside as “name (conflict – …)”
+Nowsza wygrywa => Newer wins
+Wygrywa wersja z późniejszą datą modyfikacji => The version with the later modification date wins
+Telefon wygrywa => Phone wins
+Wersja z telefonu zastępuje wersję z dysku => The phone version replaces the drive version
+Dysk wygrywa => Drive wins
+Wersja z dysku zastępuje wersję z telefonu => The drive version replaces the phone version
+Zmieniony na telefonie i na dysku => Changed on the phone and on the drive
+Dodany po obu stronach z różną treścią => Added on both sides with different content
+Po jednej stronie plik, po drugiej folder => A file on one side, a folder on the other
+Zachowaj z telefonu => Keep the phone version
+Zachowaj z dysku => Keep the drive version
+wysłano {} => uploaded {}
+pobrano {} => downloaded {}
+usunięto z dysku {} => deleted from drive {}
+usunięto z telefonu {} => deleted from phone {}
+foldery {} => folders {}
+rozstrzygnięto {} => resolved {}
+konflikty {} => conflicts {}
+błędy {} => errors {}
+Bez zmian – wszystko aktualne => No changes – everything is up to date
+nowe {} => new {}
+zmienione {} => changed {}
+usunięte {} => deleted {}
+bez zmian => no changes
+Anulowano synchronizację => Sync cancelled
+Porównywanie folderów… => Comparing folders…
+Folder {} => Folder {}
+Konflikt: {} => Conflict: {}
+Usuwanie {} => Deleting {}
+zmienił się w trakcie – sprawdzę przy następnej synchronizacji => changed meanwhile – will check on the next sync
+źródło zmieniło się w trakcie – sprawdzę przy następnej synchronizacji => the source changed meanwhile – will check on the next sync
+cel zmienił się w trakcie – sprawdzę przy następnej synchronizacji => the destination changed meanwhile – will check on the next sync
+Folder na telefonie jest pusty, a przy ostatniej synchronizacji miał {} elementów. Jeśli to nośnik wymienny, mógł zostać odłączony. Kontynuacja usunie te pliki z dysku. => The phone folder is empty, but had {} items at the last sync. If it is removable storage, it may have been disconnected. Continuing will delete these files from the drive.
+Folder na dysku jest pusty, a przy ostatniej synchronizacji miał {} elementów. Jeśli dysk był wymieniony lub formatowany, kontynuacja usunie te pliki z telefonu. => The drive folder is empty, but had {} items at the last sync. If the drive was replaced or formatted, continuing will delete these files from the phone.
+Synchronizacja usunie {} z {} plików na stronie „{}”. Sprawdź podgląd zmian i potwierdź, jeśli to zamierzone. => Sync will delete {} of {} files on the “{}” side. Check the preview and confirm if this is intended.
+w tle => in the background
+Synchronizacja wstrzymana => Sync paused
+Synchronizacja folderów => Folder sync
+Operacja na plikach => File operation
+Przygotowanie… => Preparing…
+Operacje na plikach => File operations
+Nieprawidłowe źródło aktualizacji => Invalid update source
+Brak sumy kontrolnej => Missing checksum
+Brak prawidłowej sumy kontrolnej => No valid checksum
+Nie udało się pobrać APK (HTTP {}) => Could not download the APK (HTTP {})
+Suma kontrolna APK nie zgadza się => The APK checksum does not match
+Nie można zapisać aktualizacji => Cannot save the update
+Pobrany plik nie jest prawidłowym APK => The downloaded file is not a valid APK
+Aktualizacja dotyczy innej aplikacji ({}) => The update is for a different app ({})
+Pobrana wersja nie jest nowsza od zainstalowanej => The downloaded version is not newer than the installed one
+Nie można odczytać podpisu APK => Cannot read the APK signature
+Podpis aktualizacji nie zgadza się z zainstalowaną aplikacją. Zainstalowana wersja mogła pochodzić z innego źródła. => The update signature does not match the installed app. The installed version may come from another source.
+Zezwól OpenFilePower na instalowanie aplikacji, wróć i naciśnij Zainstaluj ponownie => Allow OpenFilePower to install apps, come back and tap Install again
+Właściwości => Properties
+Nowy folder => New folder
+Utwórz => Create
+Nowy plik => New file
+Zmień nazwę => Rename
+Wybierz pliki => Choose files
+Wybierz plik => Choose a file
+Dotknij pliku lub zaznacz kilka => Tap a file or select several
+Dotknij pliku, aby go przekazać => Tap a file to hand it over
+Zapisz tekst jako plik => Save text as a file
+Zapisz {} elem. => Save {} items
+Do: {} => To: {}
+Otwórz folder docelowy => Open the destination folder
+Wybierz ({}) => Choose ({})
+Wybierz => Choose
+Zapisz tutaj => Save here
+Anuluj => Cancel
+Odblokuj OpenFilePower => Unlock OpenFilePower
+Aplikacja zablokowana => App locked
+Odblokuj => Unlock
+Szukam… => Searching…
+Przeszukuję podfoldery {} => Searching subfolders of {}
+Brak pasujących plików => No matching files
+Brak plików w tej kategorii => No files in this category
+Pusty folder => Empty folder
+Spróbuj innej nazwy lub użyj * jako dowolnego ciągu. => Try another name or use * as a wildcard.
+Pliki pojawią się, gdy system je zindeksuje. => Files will appear once the system indexes them.
+Utwórz folder przyciskiem + lub wklej pliki ze schowka. => Create a folder with + or paste files from the clipboard.
+Źródła i foldery => Sources and folders
+Wstecz => Back
+Więcej => More
+Nowy plik tekstowy => New text file
+Zaznacz wszystko => Select all
+Ukryj ukryte pliki => Hide hidden files
+Pokaż ukryte pliki => Show hidden files
+Usuń z ulubionych => Remove from favorites
+Dodaj do ulubionych => Add to favorites
+Otwórz w nowej karcie => Open in new tab
+Synchronizuj ten folder z dyskiem => Sync this folder with a drive
+Ukryj filtry typów => Hide type filters
+Pokaż filtry typów => Show type filters
+Analizuj zajęte miejsce => Analyze used space
+Skrót na ekranie głównym => Home screen shortcut
+Galeria => Gallery
+Odśwież => Refresh
+Ustawienia => Settings
+Zakończ zaznaczanie => Done selecting
+Zaznaczono {} => Selected {}
+Odwróć zaznaczenie => Invert selection
+Filtruj folder lub szukaj w podfolderach… => Filter the folder or search subfolders…
+Filtruj… => Filter…
+Wyczyść => Clear
+Szukam… {} => Searching… {}
+Szukaj w podfolderach => Search subfolders
+Zatrzymaj => Stop
+Nowa karta => New tab
+Katalog główny => Root folder
+Zamknij kartę => Close tab
+Wyniki: {} => Results: {}
+{} elem. => {} items
+Malejąco => Descending
+Foldery na początku => Folders first
+Widok listy => List view
+Widok siatki => Grid view
+Szukaj => Search
+Przenieś {} elem. => Move {} items
+Kopiuj {} elem. => Copy {} items
+Wklej tutaj => Paste here
+Wyczyść schowek => Clear clipboard
+Kopiuj => Copy
+Wytnij => Cut
+Do kosza => To trash
+Usuń => Delete
+Zmień nazwy ({}) => Rename ({})
+Spakuj… => Compress…
+Rozpakuj => Extract
+Otwórz za pomocą… => Open with…
+Kopiuj ścieżkę => Copy path
+Pokaż w folderze => Show in folder
+Suma SHA-256 => SHA-256 checksum
+Kosz => Trash
+Opróżnij => Empty
+Elementy usunięte z pamięci wewnętrznej. Przywrócone wracają do pierwotnego folderu. => Items deleted from internal storage. Restored items return to their original folder.
+Kosz jest pusty => Trash is empty
+Usunięte pliki z pamięci wewnętrznej trafią tutaj. => Files deleted from internal storage will appear here.
+Kosz działa po nadaniu pełnego dostępu do pamięci. => Trash works after granting full storage access.
+Opróżnić kosz? => Empty the trash?
+Usuń trwale => Delete permanently
+{} elem. ({}) zostanie usuniętych na zawsze. => {} items ({}) will be deleted forever.
+Jasny => Light
+Ciemny => Dark
+Zamknij => Close
+Folder · {} elem. => Folder · {} items
+{} zdjęć · {} filmów · {} => {} photos · {} videos · {}
+Otwórz folder albumu => Open album folder
+Oś czasu => Timeline
+Oś czasu – grupuj po dniach => Timeline – group by day
+Oś czasu – grupuj po miesiącach => Timeline – group by month
+Albumy => Albums
+Rozmiar miniatur: {} => Thumbnail size: {}
+Galeria potrzebuje dostępu => The gallery needs access
+Nadaj pełny dostęp do plików na ekranie startowym. => Grant full file access on the start screen.
+Brak zdjęć i filmów => No photos or videos
+Zmień filtr albo zrób zdjęcie – galeria odświeża się przy każdym otwarciu. => Change the filter or take a photo – the gallery refreshes every time it opens.
+Dzisiaj => Today
+Wczoraj => Yesterday
+Najnowsze => Latest
+Miejsca => Places
+Kategorie => Categories
+Ostatnio odwiedzane => Recently visited
+Ostatnie pliki => Recent files
+Wolne {} z {} => {} free of {}
+Pełny dostęp do plików => Full file access
+Potrzebny, by pokazać całą pamięć, galerię, RAW-y, kategorie, miejsce na dysku i kosz. Dane nie opuszczają urządzenia. => Needed to show all storage, the gallery, RAW files, categories, disk space and trash. Data never leaves the device.
+Nadaj dostęp => Grant access
+Tylko wybrany folder => Selected folder only
+PLIK => FILE
+Pobieranie {} · {}% => Downloading {} · {}%
+Nowa wersja {} => New version {}
+Nie zamykaj aplikacji => Do not close the app
+Podpis i suma SHA-256 są sprawdzane przed instalacją => The signature and SHA-256 checksum are verified before installing
+Zainstaluj => Install
+Aktualizuj => Update
+Później => Later
+Przepalenia i niedoświetlenia => Highlights and shadows clipping
+Zamknij podgląd => Close preview
+Więcej opcji => More options
+Parametry zdjęcia (EXIF) => Photo parameters (EXIF)
+Przepalenia i cienie => Highlights and shadows
+Zatrzymaj pokaz slajdów => Stop slideshow
+Pokaz slajdów => Slideshow
+Otwórz w innej aplikacji => Open in another app
+Przepalone {}% · niedoświetlone {}% => Clipped highlights {}% · shadows {}%
+Czas => Shutter
+Korekta => Exp. comp.
+Odtwórz {} => Play {}
+Szczegóły pliku => File details
+Dotknij ⓘ przy pliku, aby zobaczyć podgląd, rozmiar folderu, EXIF zdjęcia i sumy kontrolne. => Tap ⓘ next to a file to see a preview, folder size, photo EXIF and checksums.
+Podgląd => Preview
+Otwórz => Open
+Działania => Actions
+Oblicz SHA-256 => Compute SHA-256
+Oblicz MD5 => Compute MD5
+Rozpakuj obok archiwum => Extract next to the archive
+Synchronizuj z dyskiem… => Sync with a drive…
+NAS, karta SD lub USB => NAS, SD card or USB
+Widok => View
+Motyw => Theme
+Układ => Layout
+Siatka => Grid
+Lista => List
+Ukryte pliki => Hidden files
+Pokazuj pliki i foldery zaczynające się od kropki => Show files and folders starting with a dot
+Miniatury => Thumbnails
+Podgląd zdjęć, RAW-ów i filmów na liście => Previews of photos, RAW files and videos in the list
+Widok kompaktowy => Compact view
+Niższe wiersze – więcej plików na ekranie; to samo robi szczypanie dwoma palcami => Shorter rows – more files on screen; pinching with two fingers does the same
+Filtry typów => Type filters
+Pasek Wszystko · Foldery · Zdjęcia · Wideo… nad listą plików i w galerii => The All · Folders · Photos · Video… bar above the file list and in the gallery
+Rozmiar miniatur galerii => Gallery thumbnail size
+Zdjęcia i sesja => Photos and session
+Galeria według miesięcy => Gallery by month
+Grupuj oś czasu po miesiącach zamiast po dniach => Group the timeline by month instead of by day
+Otwórz galerię => Open gallery
+Oś czasu, albumy, filtry Zdjęcia/RAW/Wideo => Timeline, albums, Photos/RAW/Video filters
+Obsługiwane RAW => Supported RAW
+Pasek nawigacji => Navigation bar
+Kategorie w pasku => Categories in the bar
+Wyłącz, aby ukryć całą sekcję => Turn off to hide the whole section
+Sortowanie => Sorting
+Sortuj według => Sort by
+Pliki => Files
+Usuwaj do kosza => Delete to trash
+Pamięć wewnętrzna: pliki można przywrócić. Foldery SAF i NAS usuwane są trwale. => Internal storage: files can be restored. SAF and NAS folders are deleted permanently.
+Otwórz kosz => Open trash
+Bezpieczeństwo => Security
+Blokada aplikacji => App lock
+Odcisk palca, twarz lub PIN urządzenia po powrocie do aplikacji => Fingerprint, face or device PIN when returning to the app
+Włącz blokadę aplikacji => Turn on app lock
+Ukryty przed innymi aplikacjami, galerią i komputerem; otwierany po uwierzytelnieniu => Hidden from other apps, the gallery and computers; opens after authentication
+Aplikacje w pasku => Apps in the sidebar
+Lista zainstalowanych aplikacji, kopie APK i odinstalowywanie => Installed apps list, APK backups and uninstalling
+Pamięć i źródła => Storage and sources
+Pełny dostęp do plików: włączony => Full file access: on
+Nadaj pełny dostęp do plików => Grant full file access
+Wszystkie foldery, kategorie, kosz i miejsce na dysku => All folders, categories, trash and disk space
+Bez niego widać tylko foldery wybrane ręcznie => Without it only manually picked folders are visible
+Dodaj folder przez system => Add a folder via the system
+Karta SD, USB lub folder chmury (SAF) => SD card, USB or a cloud folder (SAF)
+Dostęp do Android/data => Access to Android/data
+Android 11–12: wybierz „Użyj tego folderu” w oknie systemu => Android 11–12: choose “Use this folder” in the system window
+Połącz z NAS => Connect to NAS
+SMB 2/3, hasło szyfrowane w Android Keystore => SMB 2/3, password encrypted with Android Keystore
+Aktualizacje => Updates
+Sprawdzaj przy uruchomieniu => Check on startup
+Bez telemetrii => No telemetry
+Sprawdzanie… => Checking…
+Sprawdź teraz => Check now
+Dostępna wersja {} => Version {} available
+Zainstalowana {} => Installed {}
+Pobierz i zainstaluj {} => Download and install {}
+O aplikacji => About
+Wersja => Version
+Podpis: oficjalne wydanie => Signature: official release
+Podpis: kompilacja lokalna => Signature: local build
+Licencja => License
+Pomysł i wykonanie => Idea and development
+Kontakt => Contact
+Postaw kawę => Buy me a coffee
+Wesprzyj rozwój na buycoffee.to => Support development on buycoffee.to
+Zapisz => Save
+Przenieść do kosza? => Move to trash?
+Usunąć trwale? => Delete permanently?
+… i {} więcej => … and {} more
+Elementy można przywrócić z kosza. => Items can be restored from the trash.
+Pliki zostaną usunięte wraz z zawartością folderów. Tej operacji nie można cofnąć. => Files will be deleted together with folder contents. This cannot be undone.
+Elementy już istnieją => Items already exist
+W folderze {} są już elementy o tych nazwach: => The folder {} already contains items with these names:
+Nowe elementy dostaną numer, np. „plik (2).jpg” => New items get a number, e.g. “file (2).jpg”
+Pomiń istniejące => Skip existing
+Skopiowane zostaną tylko elementy bez konfliktu => Only items without a conflict will be copied
+Pliki zostaną nadpisane, foldery scalone => Files will be overwritten, folders merged
+{} plików · {} po rozpakowaniu => {} files · {} extracted
+Archiwum zostanie rozpakowane do nowego folderu obok pliku. => The archive will be extracted to a new folder next to the file.
+Połącz => Connect
+{} na {} => {} on {}
+SMB 2 / 3 · urządzenia w sieci lokalnej lub przez VPN => SMB 2 / 3 · devices on the local network or via VPN
+Serwer, np. 192.168.1.10 => Server, e.g. 192.168.1.10
+Udział, np. Zdjecia => Share, e.g. Photos
+Użytkownik => Username
+Hasło => Password
+Domena (opcjonalnie) => Domain (optional)
+Nazwa połączenia (opcjonalnie) => Connection name (optional)
+Połączenie zostanie sprawdzone przed zapisaniem. Hasło jest szyfrowane kluczem Android Keystore. => The connection is tested before saving. The password is encrypted with an Android Keystore key.
+Nie udało się wykonać operacji => The operation failed
+Rozumiem => OK
+Spakuj {} elem. => Compress {} items
+Spakuj => Compress
+Nazwa archiwum => Archive name
+Zabezpiecz hasłem => Protect with a password
+Szyfrowanie AES-256 => AES-256 encryption
+Hasło (min. 4 znaki) => Password (min. 4 characters)
+Plik: {} => File: {}
+Hasło do archiwum => Archive password
+Nieprawidłowe hasło – spróbuj ponownie. => Wrong password – try again.
+Otwórz folder prywatny => Open private folder
+Schowaj pasek boczny => Hide sidebar
+Synchronizacja => Sync
+Porządki => Cleanup
+Pamięć => Storage
+Ulubione => Favorites
+Odepnij {} => Unpin {}
+Dodaj folder => Add folder
+Sieć => Network
+Połącz z NAS (SMB) => Connect to NAS (SMB)
+Serwer Wi-Fi: włączony => Wi-Fi server: on
+Przesyłanie przez Wi-Fi => Wi-Fi transfer
+Pokaż ukryte ({}) => Show hidden ({})
+Ukryj „{}” z paska => Hide “{}” from the bar
+Ukryj wszystkie kategorie => Hide all categories
+Ustawienia i aktualizacje => Settings and updates
+Odłącz => Disconnect
+Telefon ↔ NAS, karta SD, USB => Phone ↔ NAS, SD card, USB
+Synchronizuj wszystkie => Sync all
+Wskaż folder na telefonie i na dysku => Pick a folder on the phone and on the drive
+Pliki zawsze zostają na telefonie i działają bez dysku. Gdy NAS lub nośnik jest dostępny, zmiany z obu stron są wyrównywane; konflikty nie giną – możesz je rozstrzygnąć albo zachować obie wersje. => Files always stay on the phone and work without the drive. When the NAS or storage is available, changes on both sides are reconciled; conflicts are never lost – you can resolve them or keep both versions.
+Nowa para folderów => New folder pair
+Usunąć parę „{}”? => Remove pair “{}”?
+Usuń parę => Remove pair
+Synchronizacja przestanie działać. Pliki na telefonie i na dysku pozostaną nietknięte. => Sync will stop. Files on the phone and on the drive will remain untouched.
+Ustawienia pary => Pair settings
+Podgląd zmian => Preview changes
+Historia => History
+Otwórz folder na telefonie => Open the phone folder
+Otwórz folder na dysku => Open the drive folder
+Otwórz oba foldery w kartach => Open both folders in tabs
+Kontynuuj mimo to => Continue anyway
+Wstrzymaj => Pause
+Dysk niedostępny – pliki na telefonie działają normalnie => Drive unavailable – files on the phone work normally
+Czeka na wysłanie: {} => Waiting to upload: {}
+Zsynchronizowano {} => Synchronized {}
+Jeszcze nie synchronizowano – zacznij od podglądu zmian => Not synchronized yet – start with a preview of changes
+Konflikty do rozstrzygnięcia: {} => Conflicts to resolve: {}
+Synchronizuj => Sync
+Porównuję… => Comparing…
+Otwórz {} => Open {}
+Na telefonie => On the phone
+Wybierz folder => Choose folder
+Na dysku (NAS, SD, USB) => On the drive (NAS, SD, USB)
+Nazwa pary => Pair name
+Kierunek => Direction
+Konflikty – gdy plik zmieniono po obu stronach => Conflicts – when a file changed on both sides
+Zachowanie => Behavior
+Automatycznie => Automatically
+Przy otwarciu aplikacji, po połączeniu z siecią i w tle co ~15 min => On app open, after connecting to the network and in the background every ~15 min
+Przenoś usuwanie => Propagate deletions
+Plik usunięty po jednej stronie znika też z drugiej => A file deleted on one side also disappears from the other
+Kosz dla plików z telefonu => Trash for phone files
+Nadpisane i usunięte przez synchronizację pliki z pamięci telefonu trafiają do kosza => Phone files overwritten or deleted by sync go to the trash
+Synchronizuj pliki i foldery zaczynające się od kropki => Sync files and folders starting with a dot
+Pomijaj (wzorce, np. *.tmp, Thumbs.db) => Skip (patterns, e.g. *.tmp, Thumbs.db)
+Pierwsza synchronizacja porównuje pliki o tej samej wielkości po treści – nic się nie zduplikuje, a różniące się pliki staną się konfliktami. => The first sync compares same-size files by content – nothing gets duplicated and differing files become conflicts.
+Folder na telefonie => Phone folder
+Folder na dysku => Drive folder
+Źródła => Sources
+Brakuje dysku? Dodaj NAS lub folder USB w panelu bocznym. => Drive missing? Add a NAS or USB folder in the sidebar.
+W górę => Up
+Brak podfolderów => No subfolders
+Wybierz ten folder => Choose this folder
+Podgląd: {} => Preview: {}
+Od ostatniej synchronizacji => Since the last sync
+Na dysku => On the drive
+Wszystko aktualne – nic do zrobienia. => Everything is up to date – nothing to do.
+Wyśle na dysk => Will upload to the drive
+Pobierze na telefon => Will download to the phone
+Usunie z dysku => Will delete from the drive
+Usunie z telefonu => Will delete from the phone
+Utworzy foldery => Will create folders
+Zachowa obie wersje => Will keep both versions
+Konflikty do decyzji => Conflicts to decide
+Konflikty: {} => Conflicts: {}
+Brak konfliktów. => No conflicts.
+Wybierz, która wersja zostaje. „Zachowaj obie” zapisze starszą jako „nazwa (konflikt – …)” po obu stronach. => Choose which version stays. “Keep both” saves the older one as “name (conflict – …)” on both sides.
+Wszystkie: => All:
+Telefon => Phone
+Dysk => Drive
+Zastosuj ({}) => Apply ({})
+usunięty => deleted
+Historia: {} => History: {}
+Jeszcze nie synchronizowano. => Not synchronized yet.
+Synchronizacja: konflikty {} => Sync: conflicts {}
+Zsynchronizowano od ostatniej wizyty => Synchronized since your last visit
+{} aplikacji · {} plików APK => {} apps · {} of APK files
+Szukaj aplikacji => Search apps
+Pobrane aplikacje => Downloaded apps
+Wszystkie, także systemowe => All, including system
+Kopia APK {} => APK backup {}
+Wersja {} ({}) => Version {} ({})
+Rozmiar APK => APK size
+Zainstalowano => Installed
+Zaktualizowano => Updated
+Uruchom => Launch
+Zapisz kopię APK => Save APK backup
+Pakiet dzielony – zapis jako .apks => Split package – saved as .apks
+Do folderu Pobrane/APK => To the Download/APK folder
+Informacje o aplikacji => App info
+Ustawienia systemu: uprawnienia, pamięć, wymuś zatrzymanie => System settings: permissions, storage, force stop
+Odinstaluj => Uninstall
+Identyczne pliki w pamięci wewnętrznej => Identical files in internal storage
+Pliki tymczasowe, stare APK, puste foldery => Temporary files, old APKs, empty folders
+Duplikaty => Duplicates
+Zbędne pliki => Unneeded files
+Znajdź duplikaty => Find duplicates
+Porównuje rozmiar i treść (SHA-256) plików od 1 KB. Pliki w Android/ i ukrytych folderach są pomijane. => Compares size and content (SHA-256) of files from 1 KB. Files in Android/ and hidden folders are skipped.
+Znajdź zbędne pliki => Find unneeded files
+Stare pliki APK, niedokończone pobrania, logi, miniatury galerii i puste foldery. Pamięci podręcznej innych aplikacji Android nie pozwala czyścić – służy do tego „Informacje o aplikacji”. => Old APK files, unfinished downloads, logs, gallery thumbnails and empty folders. Android does not allow clearing other apps' caches – use “App info” for that.
+Nic do posprzątania => Nothing to clean up
+Nie znaleziono identycznych plików. => No identical files found.
+Nie znaleziono zbędnych plików. => No unneeded files found.
+{} grup · do odzyskania {} => {} groups · {} to reclaim
+Zaznacz kopie => Select copies
+Odznacz => Deselect
+Zaznacz => Select
+… i {} więcej (zaznaczane przyciskiem „Zaznacz”) => … and {} more (selected with the “Select” button)
+{} zaznaczonych · {} => {} selected · {}
+Wykryte w sieci => Found on the network
+Szukam serwerów SMB… {}% => Looking for SMB servers… {}%
+Znaleziono: {} => Found: {}
+Skanuj => Scan
+ogłasza się w sieci => announces itself on the network
+otwarty port SMB => open SMB port
+Nie znaleziono serwerów. Upewnij się, że telefon jest w tej samej sieci Wi-Fi co NAS, albo wpisz adres ręcznie. => No servers found. Make sure the phone is on the same Wi-Fi as the NAS, or enter the address manually.
+Serwer i logowanie => Server and login
+Użytkownik (puste = gość) => Username (empty = guest)
+Pobieranie udziałów… => Loading shares…
+Pokaż udziały => Show shares
+Udział => Share
+Serwer nie udostępnia publicznych udziałów dla tego konta. => The server shares nothing for this account.
+SMB 2/3. Połączenie zostanie sprawdzone przed zapisaniem; hasło jest szyfrowane kluczem Android Keystore. => SMB 2/3. The connection is tested before saving; the password is encrypted with an Android Keystore key.
+Wzorzec => Pattern
+Zamień => Replace
+Przedrostek/przyrostek => Prefix/suffix
+Wielkość liter => Letter case
+Zmień nazwy {} elem. => Rename {} items
+Zmień => Rename
+Numer początkowy => Start number
+Znajdź => Find
+Zamień na => Replace with
+Przedrostek => Prefix
+Przyrostek (przed rozszerzeniem) => Suffix (before extension)
+małe litery => lowercase
+WIELKIE LITERY => UPPERCASE
+Nazwy muszą być poprawne i niepowtarzalne. => Names must be valid and unique.
+Zajęte miejsce => Used space
+Serwer SFTP, FTP lub WebDAV => SFTP, FTP or WebDAV server
+Protokół => Protocol
+Serwer, np. 192.168.1.10 lub cloud.example.com => Server, e.g. 192.168.1.10 or cloud.example.com
+Port (domyślnie {}) => Port (default {})
+Ścieżka, np. remote.php/dav/files/jan => Path, e.g. remote.php/dav/files/john
+Folder startowy (opcjonalnie) => Start folder (optional)
+Użytkownik (puste = anonimowo) => Username (empty = anonymous)
+Odcisk klucza serwera zostanie zapamiętany przy pierwszym połączeniu; jego zmiana zablokuje połączenie. => The server key fingerprint is remembered on first connection; if it changes, the connection is blocked.
+Zwykły FTP przesyła hasło bez szyfrowania – używaj go tylko w zaufanej sieci. => Plain FTP sends the password unencrypted – use it only on a trusted network.
+WebDAV przez HTTP przesyła hasło bez szyfrowania – wybierz HTTPS, jeśli serwer go obsługuje. => WebDAV over HTTP sends the password unencrypted – choose HTTPS if the server supports it.
+Połączenie szyfrowane TLS. => TLS-encrypted connection.
+{} Połączenie zostanie sprawdzone przed zapisaniem; hasło jest szyfrowane kluczem Android Keystore. => {} The connection is tested before saving; the password is encrypted with an Android Keystore key.
+Wpisz w przeglądarce komputera w tej samej sieci: => Type this in a browser on a computer on the same network:
+Kopiuj adres => Copy address
+Skopiowano adres => Address copied
+Przeglądaj, pobieraj i wysyłaj pliki pamięci telefonu z przeglądarki komputera – bez kabla i bez instalowania czegokolwiek. => Browse, download and upload phone files from a computer's browser – no cable and nothing to install.
+Uruchom serwer => Start server
+Wymaga pełnego dostępu do plików. => Requires full file access.
+Adres zawiera losowy klucz zmieniany przy każdym uruchomieniu – bez niego nikt w sieci nie zobaczy plików. Połączenie nie jest szyfrowane, więc używaj go w domowej sieci. Serwer działa, dopóki aplikacja jest otwarta. => The address contains a random key that changes on every start – without it nobody on the network can see the files. The connection is not encrypted, so use it on your home network. The server runs while the app is open.
+Zamknij edytor => Close editor
+● Niezapisane zmiany · {} => ● Unsaved changes · {}
+{} wierszy · {} => {} lines · {}
+Mniejsza czcionka => Smaller font
+Większa czcionka => Larger font
+Zawijanie wierszy => Word wrap
+Zapisać zmiany? => Save changes?
+Odrzuć => Discard
+Plik {} ma niezapisane zmiany. => The file {} has unsaved changes.
+Język => Language
+Język interfejsu => Interface language
+Automatycznie => Automatic
+Wybierz plik do zapisania => Choose a file to save
+Brak => None
+"""

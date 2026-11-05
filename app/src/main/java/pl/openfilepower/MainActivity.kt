@@ -11,7 +11,9 @@ import androidx.activity.enableEdgeToEdge
 import pl.openfilepower.ui.AppRoot
 import pl.openfilepower.ui.AppTheme
 
-class MainActivity : ComponentActivity() {
+class MainActivity : androidx.fragment.app.FragmentActivity() {
+    override fun onStart() { super.onStart(); AppLock.onStart(this) }
+    override fun onStop() { AppLock.onStop(); super.onStop() }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // Jasność ikon pasków systemowych ustawia AppTheme, zgodnie z wybranym motywem.
@@ -22,6 +24,7 @@ class MainActivity : ComponentActivity() {
             prefs.setFlag("askedNotifications", true)
             requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
         }
+        pl.openfilepower.ui.I18n.load(this)
         setContent { AppTheme { AppRoot() } }
         handle(intent)
     }
