@@ -1,3 +1,9 @@
+## 1.0.9
+
+- Poprawka budowania: wersja 1.0.8 nie powstała (błąd kompilacji w CI) – jej zmiany wchodzą w tę wersję.
+- Zgłaszanie błędów i sugestii: nowa pozycja „Zgłoś błąd lub sugestię” – opis trafia prosto do autora przez redzikowski.com, e-mail jest opcjonalny.
+- Po nieoczekiwanym zamknięciu aplikacja przy następnym uruchomieniu proponuje wysłanie raportu o błędzie – tylko za zgodą użytkownika.
+
 ## 1.0.8
 
 - „Otwórz za pomocą”, „Udostępnij” (zapis w wybranym folderze) i wybieranie plików dla innych aplikacji.

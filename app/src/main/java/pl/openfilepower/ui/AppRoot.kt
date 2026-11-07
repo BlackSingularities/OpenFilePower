@@ -200,7 +200,7 @@ import pl.openfilepower.*
 
 /** Ekran blokady: zasłania wszystko, dopóki użytkownik nie potwierdzi tożsamości. */
 @Composable private fun LockScreen() {
-    val activity = LocalContext.current as? androidx.fragment.app.FragmentActivity
+    val activity = androidx.activity.compose.LocalActivity.current as? androidx.fragment.app.FragmentActivity
     var message by remember { mutableStateOf<String?>(null) }
     val unlock: () -> Unit = {
         // Bez blokady ekranu na urządzeniu nie da się uwierzytelnić – nie zamykamy użytkownika na zewnątrz.

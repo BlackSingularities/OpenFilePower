@@ -48,7 +48,7 @@ import pl.openfilepower.*
             if (vm.appsEnabled) NavRow(Icons.Rounded.Apps, "Aplikacje", vm.view == View.Apps) { vm.openApps(); done() }
             NavRow(Icons.Rounded.CleaningServices, "Porządki", vm.view == View.Cleanup) { vm.openCleanup(); done() }
             if (vm.vaultEnabled) {
-                val activity = androidx.compose.ui.platform.LocalContext.current as? androidx.fragment.app.FragmentActivity
+                val activity = androidx.activity.compose.LocalActivity.current as? androidx.fragment.app.FragmentActivity
                 NavRow(Icons.Rounded.EnhancedEncryption, "Folder prywatny", vm.place?.root == Vault.ROOT_ID) {
                     if (vm.vaultOpen) { vm.openVault(); done() }
                     else if (activity != null) AppLock.authenticate(activity, "Otwórz folder prywatny", onError = { vm.error = it }) { vm.openVault(); done() }

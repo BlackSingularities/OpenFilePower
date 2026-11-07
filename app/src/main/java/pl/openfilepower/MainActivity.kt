@@ -1,5 +1,7 @@
 package pl.openfilepower
 
+import pl.openfilepower.feedback.Feedback
+import pl.openfilepower.feedback.CrashReportPrompt
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
@@ -16,6 +18,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
     override fun onStop() { AppLock.onStop(); super.onStop() }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Feedback.install(this, "openfilepower")
         // Jasność ikon pasków systemowych ustawia AppTheme, zgodnie z wybranym motywem.
         enableEdgeToEdge(statusBarStyle = SystemBarStyle.auto(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT), navigationBarStyle = SystemBarStyle.auto(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT))
         // Powiadomienie o postępie kopiowania w tle – pytamy raz, przy pierwszym uruchomieniu.
@@ -25,7 +28,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
             requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
         }
         pl.openfilepower.ui.I18n.load(this)
-        setContent { AppTheme { AppRoot() } }
+        setContent { AppTheme { CrashReportPrompt(); AppRoot() } }
         handle(intent)
     }
     override fun onNewIntent(intent: android.content.Intent) {

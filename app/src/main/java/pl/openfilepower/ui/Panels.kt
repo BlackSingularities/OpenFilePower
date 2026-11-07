@@ -159,6 +159,9 @@ import pl.openfilepower.*
             InfoRow(Icons.Rounded.Gavel, "Licencja", "MIT · jcifs-ng: LGPL-2.1")
             ActionRow(Icons.Rounded.Person, "Pomysł i wykonanie", "Adam Rędzikowski · redzikowski.com") { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://redzikowski.com")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }
             ActionRow(Icons.Rounded.Email, "Kontakt", "kontakt@redzikowski.com") { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("mailto:kontakt@redzikowski.com")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }
+            pl.openfilepower.feedback.FeedbackEntry { open ->
+                ActionRow(Icons.Rounded.BugReport, pl.openfilepower.feedback.FeedbackText.entryTitle, pl.openfilepower.feedback.FeedbackText.entrySubtitle) { open() }
+            }
             ActionRow(Icons.Rounded.LocalCafe, "Postaw kawę", "Wesprzyj rozwój na buycoffee.to") { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://buycoffee.to/adamredzikowski")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }
         }
         Spacer(Modifier.height(24.dp))
