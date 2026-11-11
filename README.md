@@ -1,5 +1,13 @@
 # OpenFilePower
 
+<!-- posters:start -->
+<p align="center">
+  <img src="docs/posters/android.png" alt="OpenFilePower – Android" width="460">
+</p>
+
+<p align="center"><a href="https://redzikowski.com/portfolio/openfilepower">redzikowski.com/portfolio/openfilepower</a></p>
+<!-- posters:end -->
+
 Kombajn do plików, zdjęć i wideo na Androida – cała pamięć urządzenia, karty SD, foldery systemowe i NAS w jednej przestrzeni z kartami, galeria z obsługą RAW, histogramem i trybem sesji na żywo. Kotlin, Jetpack Compose, czarno-biały interfejs wspólny z [OpenPDF](https://github.com/BlackSingularities/OpenPDF). Bez reklam i telemetrii.
 
 [![Android](https://github.com/BlackSingularities/OpenFilePower/actions/workflows/android.yml/badge.svg)](https://github.com/BlackSingularities/OpenFilePower/actions/workflows/android.yml)

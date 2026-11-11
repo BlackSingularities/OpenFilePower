@@ -1,0 +1,22 @@
+{
+  "slug": "openfilepower",
+  "name": "OpenFilePower",
+  "label": "pliki · zdjęcia RAW · NAS",
+  "icon": "icon.png",
+  "url": "https://redzikowski.com/portfolio/openfilepower",
+  "posters": [
+    {
+      "platform": "android",
+      "file": "android.png",
+      "title": "Wszystkie pliki *w jednym miejscu*",
+      "lead": "Pliki z telefonu, karty, USB i domowego NAS-a w kartach folderów, z galerią zdjęć RAW i synchronizacją.",
+      "shots": [
+        { "src": "../screenshots/android/01-start.png", "caption": "Start" },
+        { "src": "../screenshots/android/02-galeria.png", "caption": "Galeria" },
+        { "src": "../screenshots/android/03-foldery.png", "caption": "Karty folderów" }
+      ],
+      "features": ["karty folderów", "NAS przez SMB 2/3", "galeria RAW z histogramem", "synchronizacja z NAS, SD i USB", "kategorie plików"],
+      "meta": "Android 8 lub nowszy"
+    }
+  ]
+}
